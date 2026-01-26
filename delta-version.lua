@@ -1,110 +1,155 @@
 --[[
     ═══════════════════════════════════════════════════════
-    🎣 FISCH AUTO - BALANCED
-    Bisa mancing, tapi gak gerak aneh-aneh!
+    🎣 FISCH AUTO - DELTA EXECUTOR OPTIMIZED
+    Designed specifically for Delta Executor!
     ═══════════════════════════════════════════════════════
 ]]
 
 print("════════════════════════════════════════")
-print("🎣 FISCH AUTO - BALANCED LOADING...")
+print("🎣 FISCH AUTO - DELTA VERSION")
 print("════════════════════════════════════════")
 
+-- Wait for game to load
 repeat task.wait() until game:IsLoaded()
 task.wait(2)
 
 -- ════════════════════════════════════════════════════════
--- SERVICES
+-- DELTA EXECUTOR SPECIFIC SETUP
 -- ════════════════════════════════════════════════════════
-local Players = game:GetService("Players")
-local RS = game:GetService("ReplicatedStorage")
-local UIS = game:GetService("UserInputService")
-local VIM = game:GetService("VirtualInputManager")
+local Services = {
+    Players = game:GetService("Players"),
+    ReplicatedStorage = game:GetService("ReplicatedStorage"),
+    UserInputService = game:GetService("UserInputService"),
+    VirtualInputManager = game:GetService("VirtualInputManager"),
+    RunService = game:GetService("RunService"),
+    VirtualUser = game:GetService("VirtualUser"),
+}
 
-local Player = Players.LocalPlayer
+local Player = Services.Players.LocalPlayer
+local Mouse = Player:GetMouse()
 local PlayerGui = Player:WaitForChild("PlayerGui")
 local Backpack = Player:WaitForChild("Backpack")
 
 -- ════════════════════════════════════════════════════════
 -- CONFIG
 -- ════════════════════════════════════════════════════════
-local Config = {
+getgenv().FischConfig = getgenv().FischConfig or {
     Enabled = false,
-    CastDelay = 2.5,
-    ReelDelay = 0.3,
+    AutoCast = true,
+    AutoReel = true,
+    
+    -- Timings (optimized for Delta)
+    CastDelay = 2.8,
+    ReelDelay = 0.4,
+    ShakeDelay = 0.1,
+    
+    -- Debug
     ShowDebug = true,
 }
 
-local Stats = {
-    Fish = 0,
-    Casts = 0,
-    Reels = 0,
+local Config = getgenv().FischConfig
+
+-- ════════════════════════════════════════════════════════
+-- STATS
+-- ════════════════════════════════════════════════════════
+getgenv().FischStats = getgenv().FischStats or {
+    TotalFish = 0,
+    TotalCasts = 0,
+    SuccessfulReels = 0,
     StartTime = tick(),
     Status = "Ready",
+    LastAction = "None",
 }
 
-local function Log(...)
+local Stats = getgenv().FischStats
+
+-- ════════════════════════════════════════════════════════
+-- DEBUG FUNCTION
+-- ════════════════════════════════════════════════════════
+local function Debug(...)
     if Config.ShowDebug then
-        print("🎣", ...)
+        print("🎣 [DELTA]", ...)
     end
 end
 
 -- ════════════════════════════════════════════════════════
--- ANTI-AFK (SOFT)
+-- DELTA SPECIFIC ANTI-AFK
 -- ════════════════════════════════════════════════════════
-Player.Idled:Connect(function()
+local function AntiAFK()
     pcall(function()
-        game:GetService("VirtualUser"):CaptureController()
-        game:GetService("VirtualUser"):ClickButton2(Vector2.new())
+        Services.VirtualUser:CaptureController()
+        Services.VirtualUser:ClickButton2(Vector2.new())
     end)
-end)
+end
+
+Player.Idled:Connect(AntiAFK)
 
 -- ════════════════════════════════════════════════════════
--- FIND REMOTES
+-- REMOTE DETECTION (DELTA OPTIMIZED)
 -- ════════════════════════════════════════════════════════
-local Remotes = {}
+local RemoteEvents = {}
+local RemoteFunctions = {}
 
-Log("Scanning remotes...")
-for _, remote in pairs(RS:GetDescendants()) do
-    if remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") then
-        Remotes[remote.Name] = remote
-        Log("Found:", remote.Name, "|", remote:GetFullName())
+local function ScanRemotes()
+    Debug("Scanning for remotes...")
+    
+    for _, descendant in pairs(Services.ReplicatedStorage:GetDescendants()) do
+        if descendant:IsA("RemoteEvent") then
+            RemoteEvents[descendant.Name:lower()] = descendant
+            Debug("RemoteEvent found:", descendant.Name)
+        elseif descendant:IsA("RemoteFunction") then
+            RemoteFunctions[descendant.Name:lower()] = descendant
+            Debug("RemoteFunction found:", descendant.Name)
+        end
     end
 end
 
--- Try to find fishing remotes
-local CastRemote = nil
-local ReelRemote = nil
+ScanRemotes()
 
--- Common cast names
-for name, remote in pairs(Remotes) do
-    local lname = name:lower()
-    if lname:match("cast") or lname:match("throw") or lname:match("fish") then
-        CastRemote = remote
-        Log("✅ Auto-detected Cast remote:", name)
+-- Find fishing remotes
+local FishingRemotes = {
+    Cast = nil,
+    Reel = nil,
+    Shake = nil,
+}
+
+-- Auto-detect cast remote
+for name, remote in pairs(RemoteEvents) do
+    if name:find("cast") or name:find("throw") or name:find("fish") then
+        FishingRemotes.Cast = remote
+        Debug("✅ Cast remote detected:", remote.Name)
         break
     end
 end
 
--- Common reel names  
-for name, remote in pairs(Remotes) do
-    local lname = name:lower()
-    if lname:match("reel") or lname:match("catch") or lname:match("complete") then
-        ReelRemote = remote
-        Log("✅ Auto-detected Reel remote:", name)
+-- Auto-detect reel remote  
+for name, remote in pairs(RemoteEvents) do
+    if name:find("reel") or name:find("catch") or name:find("complete") then
+        FishingRemotes.Reel = remote
+        Debug("✅ Reel remote detected:", remote.Name)
+        break
+    end
+end
+
+-- Auto-detect shake remote
+for name, remote in pairs(RemoteEvents) do
+    if name:find("shake") or name:find("struggle") then
+        FishingRemotes.Shake = remote
+        Debug("✅ Shake remote detected:", remote.Name)
         break
     end
 end
 
 -- ════════════════════════════════════════════════════════
--- ROD FUNCTIONS
+-- ROD MANAGEMENT
 -- ════════════════════════════════════════════════════════
-local function GetRod()
-    -- Check equipped
+local function FindFishingRod()
+    -- Check equipped tools
     if Player.Character then
         for _, tool in pairs(Player.Character:GetChildren()) do
             if tool:IsA("Tool") then
-                local name = tool.Name:lower()
-                if name:find("rod") or name:find("fish") then
+                local toolName = tool.Name:lower()
+                if toolName:find("rod") or toolName:find("fishing") or toolName:find("pole") then
                     return tool, "equipped"
                 end
             end
@@ -114,8 +159,8 @@ local function GetRod()
     -- Check backpack
     for _, tool in pairs(Backpack:GetChildren()) do
         if tool:IsA("Tool") then
-            local name = tool.Name:lower()
-            if name:find("rod") or name:find("fish") then
+            local toolName = tool.Name:lower()
+            if toolName:find("rod") or toolName:find("fishing") or toolName:find("pole") then
                 return tool, "backpack"
             end
         end
@@ -124,20 +169,23 @@ local function GetRod()
     return nil, "none"
 end
 
-local function EquipRod()
-    local rod, location = GetRod()
+local function EquipFishingRod()
+    local rod, location = FindFishingRod()
+    
     if not rod then
-        Log("❌ No fishing rod found!")
+        Debug("❌ No fishing rod found!")
         return false
     end
     
     if location == "backpack" then
-        Log("🎣 Equipping rod:", rod.Name)
-        Player.Character.Humanoid:EquipTool(rod)
-        task.wait(0.5)
-        return true
+        Debug("🎣 Equipping fishing rod:", rod.Name)
+        if Player.Character and Player.Character:FindFirstChild("Humanoid") then
+            Player.Character.Humanoid:EquipTool(rod)
+            task.wait(0.5)
+            return true
+        end
     elseif location == "equipped" then
-        Log("✅ Rod already equipped")
+        Debug("✅ Fishing rod already equipped")
         return true
     end
     
@@ -145,279 +193,331 @@ local function EquipRod()
 end
 
 -- ════════════════════════════════════════════════════════
--- UI DETECTION (BETTER)
+-- UI DETECTION (DELTA COMPATIBLE)
 -- ════════════════════════════════════════════════════════
-local function GetFishingUI()
-    local fishingGuis = {}
+local function DetectFishingUI()
+    local fishingUI = {
+        reel = false,
+        shake = false,
+        elements = {}
+    }
     
     for _, gui in pairs(PlayerGui:GetChildren()) do
         if gui:IsA("ScreenGui") and gui.Enabled then
             -- Skip our own GUI
-            if gui.Name == "FischBalancedGUI" then continue end
+            if gui.Name == "DeltaFischGUI" then continue end
             
             for _, obj in pairs(gui:GetDescendants()) do
-                if obj:IsA("Frame") and obj.Visible then
-                    local name = obj.Name:lower()
-                    local parent = obj.Parent and obj.Parent.Name:lower() or ""
+                if obj:IsA("GuiObject") and obj.Visible then
+                    local objName = obj.Name:lower()
+                    local objText = ""
                     
-                    -- Look for fishing UI indicators
-                    if name:find("reel") or name:find("safe") or name:find("bar") or 
-                       name:find("fish") or parent:find("fish") then
-                        table.insert(fishingGuis, {
-                            name = obj.Name,
-                            obj = obj,
-                            type = "reel"
-                        })
-                        Log("🎯 Found fishing UI:", obj.Name, "in", obj.Parent.Name)
+                    if obj:IsA("TextLabel") then
+                        objText = obj.Text:lower()
+                    elseif obj:IsA("TextButton") then
+                        objText = obj.Text:lower()
                     end
-                end
-                
-                -- Look for buttons
-                if (obj:IsA("TextButton") or obj:IsA("ImageButton")) and obj.Visible then
-                    local text = obj.Text and obj.Text:lower() or ""
-                    local name = obj.Name:lower()
                     
-                    if text:find("reel") or text:find("catch") or name:find("reel") then
-                        table.insert(fishingGuis, {
-                            name = obj.Name,
-                            obj = obj,
-                            type = "button"
-                        })
-                        Log("🔘 Found reel button:", obj.Name)
+                    -- Detect reel UI
+                    if objName:find("reel") or objName:find("safe") or objName:find("bar") or 
+                       objText:find("reel") or objText:find("catch") then
+                        fishingUI.reel = true
+                        table.insert(fishingUI.elements, {type = "reel", obj = obj})
+                    end
+                    
+                    -- Detect shake UI
+                    if objName:find("shake") or objName:find("struggle") or
+                       objText:find("shake") or objText:find("struggle") then
+                        fishingUI.shake = true
+                        table.insert(fishingUI.elements, {type = "shake", obj = obj})
                     end
                 end
             end
         end
     end
     
-    return fishingGuis
+    return fishingUI
 end
 
 -- ════════════════════════════════════════════════════════
--- FISHING FUNCTIONS (BALANCED)
+-- FISHING ACTIONS (DELTA OPTIMIZED)
 -- ════════════════════════════════════════════════════════
-local IsFishing = false
-local LastAction = 0
+local FishingState = {
+    Idle = "Idle",
+    Casting = "Casting",
+    Waiting = "Waiting",
+    Reeling = "Reeling",
+    Shaking = "Shaking",
+}
 
-local function Cast()
-    if IsFishing then return false end
-    if tick() - LastAction < 1 then return false end
+local CurrentState = FishingState.Idle
+local LastCastTime = 0
+local ReelCooldown = false
+
+-- CAST FUNCTION
+local function PerformCast()
+    if CurrentState ~= FishingState.Idle then return false end
+    if tick() - LastCastTime < Config.CastDelay then return false end
     
-    if not EquipRod() then
-        Stats.Status = "❌ No Rod!"
+    CurrentState = FishingState.Casting
+    Stats.TotalCasts = Stats.TotalCasts + 1
+    Stats.Status = "🎣 Casting..."
+    Stats.LastAction = "Cast #" .. Stats.TotalCasts
+    
+    Debug("🎣 Performing cast #" .. Stats.TotalCasts)
+    
+    -- Equip rod first
+    if not EquipFishingRod() then
+        CurrentState = FishingState.Idle
         return false
     end
     
-    Stats.Casts = Stats.Casts + 1
-    Stats.Status = "🎣 Casting..."
-    Log("🎣 Casting attempt #" .. Stats.Casts)
+    local castSuccess = false
     
-    local success = false
-    
-    -- Method 1: Try cast remote first
-    if CastRemote then
-        local s = pcall(function()
-            CastRemote:FireServer()
+    -- Method 1: Fire cast remote
+    if FishingRemotes.Cast then
+        local success = pcall(function()
+            FishingRemotes.Cast:FireServer()
         end)
-        if s then
-            Log("✅ Cast remote fired")
-            success = true
+        if success then
+            Debug("✅ Cast remote fired successfully")
+            castSuccess = true
         end
     end
     
-    -- Method 2: Tool activation (SAFE - just activates, doesn't move)
-    if not success then
-        local rod = GetRod()
+    -- Method 2: Use tool activation (Delta compatible)
+    if not castSuccess then
+        local rod = FindFishingRod()
         if rod then
-            Log("🔧 Activating tool")
+            Debug("🔧 Activating fishing rod")
             rod:Activate()
-            success = true
+            castSuccess = true
         end
     end
     
-    -- Method 3: Single click (not spam!)
-    if not success then
-        Log("🖱️ Mouse click")
-        VIM:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+    -- Method 3: Mouse click simulation (Delta method)
+    if not castSuccess then
+        Debug("🖱️ Using mouse simulation")
+        Services.VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
         task.wait(0.1)
-        VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-        success = true
+        Services.VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+        castSuccess = true
     end
     
-    if success then
-        IsFishing = true
+    if castSuccess then
+        LastCastTime = tick()
+        CurrentState = FishingState.Waiting
         Stats.Status = "⏳ Waiting for fish..."
-        LastAction = tick()
+        
+        -- Auto-timeout after 30 seconds
+        task.spawn(function()
+            task.wait(30)
+            if CurrentState == FishingState.Waiting then
+                Debug("⏰ Cast timeout, resetting...")
+                CurrentState = FishingState.Idle
+            end
+        end)
+        
         return true
     end
     
+    CurrentState = FishingState.Idle
     return false
 end
 
-local ReelCooldown = false
-
-local function Reel()
+-- REEL FUNCTION
+local function PerformReel()
     if ReelCooldown then return false end
-    ReelCooldown = true
+    if CurrentState ~= FishingState.Waiting then return false end
     
-    Stats.Reels = Stats.Reels + 1
-    Stats.Status = "🔄 Reeling..."
-    Log("🔄 Reeling attempt #" .. Stats.Reels)
+    ReelCooldown = true
+    CurrentState = FishingState.Reeling
+    Stats.Status = "🔄 Reeling in fish..."
+    Stats.LastAction = "Reeling"
+    
+    Debug("🔄 Performing reel")
     
     task.wait(Config.ReelDelay)
     
-    local success = false
+    local reelSuccess = false
     
-    -- Method 1: Reel remote
-    if ReelRemote then
-        local s = pcall(function()
-            ReelRemote:FireServer()
+    -- Method 1: Fire reel remote
+    if FishingRemotes.Reel then
+        local success = pcall(function()
+            FishingRemotes.Reel:FireServer()
         end)
-        if s then
-            Log("✅ Reel remote fired")
-            success = true
+        if success then
+            Debug("✅ Reel remote fired successfully")
+            reelSuccess = true
         end
     end
     
-    -- Method 2: Click fishing UI buttons
-    local fishingUI = GetFishingUI()
-    for _, ui in pairs(fishingUI) do
-        if ui.type == "button" then
+    -- Method 2: Click UI elements
+    local ui = DetectFishingUI()
+    for _, element in pairs(ui.elements) do
+        if element.type == "reel" and element.obj:IsA("GuiButton") then
             pcall(function()
-                ui.obj.MouseButton1Click:Fire()
+                element.obj.MouseButton1Click:Fire()
             end)
             pcall(function()
-                firesignal(ui.obj.MouseButton1Click)
+                firesignal(element.obj.MouseButton1Click)
             end)
-            success = true
+            reelSuccess = true
         end
     end
     
-    -- Method 3: Single E key (not spam)
-    if not success then
-        Log("⌨️ E key press")
-        VIM:SendKeyEvent(true, "E", false, game)
+    -- Method 3: Key simulation (Delta compatible)
+    if not reelSuccess then
+        Debug("⌨️ Using E key simulation")
+        Services.VirtualInputManager:SendKeyEvent(true, "E", false, game)
         task.wait(0.1)
-        VIM:SendKeyEvent(false, "E", false, game)
+        Services.VirtualInputManager:SendKeyEvent(false, "E", false, game)
+        reelSuccess = true
     end
     
-    -- Count as fish caught
-    Stats.Fish = Stats.Fish + 1
-    Stats.Status = "✅ Fish #" .. Stats.Fish
-    Log("✅ Fish caught! Total: " .. Stats.Fish)
+    if reelSuccess then
+        Stats.TotalFish = Stats.TotalFish + 1
+        Stats.SuccessfulReels = Stats.SuccessfulReels + 1
+        Stats.Status = "✅ Fish caught! Total: " .. Stats.TotalFish
+        Stats.LastAction = "Fish #" .. Stats.TotalFish
+        Debug("✅ Fish successfully caught! Total: " .. Stats.TotalFish)
+    else
+        Debug("❌ Reel attempt failed")
+    end
     
     task.wait(1)
-    IsFishing = false
+    CurrentState = FishingState.Idle
     ReelCooldown = false
-    LastAction = tick()
     
-    return true
+    return reelSuccess
+end
+
+-- SHAKE FUNCTION
+local function PerformShake()
+    CurrentState = FishingState.Shaking
+    Stats.Status = "⚡ Shaking to escape!"
+    Stats.LastAction = "Shaking"
+    
+    Debug("⚡ Performing shake sequence")
+    
+    -- Method 1: Shake remote
+    if FishingRemotes.Shake then
+        for i = 1, 3 do
+            pcall(function()
+                FishingRemotes.Shake:FireServer()
+            end)
+            task.wait(Config.ShakeDelay)
+        end
+    else
+        -- Method 2: Key spam (W key, Delta compatible)
+        for i = 1, 5 do
+            Services.VirtualInputManager:SendKeyEvent(true, "W", false, game)
+            task.wait(Config.ShakeDelay)
+            Services.VirtualInputManager:SendKeyEvent(false, "W", false, game)
+            task.wait(Config.ShakeDelay)
+        end
+    end
 end
 
 -- ════════════════════════════════════════════════════════
--- MAIN LOOP (SMART)
+-- MAIN FISHING LOOP (DELTA OPTIMIZED)
 -- ════════════════════════════════════════════════════════
 task.spawn(function()
-    Log("🚀 Auto fishing started")
+    Debug("🚀 Delta fishing loop started")
     
-    while task.wait(0.5) do
+    while task.wait(0.3) do
         if not Config.Enabled then
             Stats.Status = "⏹️ Stopped"
+            CurrentState = FishingState.Idle
             continue
         end
         
-        -- Check for fishing UI
-        local fishingUI = GetFishingUI()
-        local hasReelUI = #fishingUI > 0
+        -- Detect current fishing UI state
+        local fishingUI = DetectFishingUI()
         
-        if hasReelUI and IsFishing then
-            -- Reel the fish!
-            Reel()
-        elseif not IsFishing and not hasReelUI then
-            -- Cast again
-            if tick() - LastAction >= Config.CastDelay then
-                Cast()
-            end
-        else
-            Stats.Status = "⏳ Waiting..."
+        -- Handle shake events
+        if fishingUI.shake and Config.AutoReel then
+            PerformShake()
+        -- Handle reel events
+        elseif fishingUI.reel and Config.AutoReel then
+            PerformReel()
+        -- Handle casting when idle
+        elseif CurrentState == FishingState.Idle and Config.AutoCast then
+            PerformCast()
         end
         
-        -- Safety reset
-        if IsFishing and tick() - LastAction > 30 then
-            Log("⏰ Timeout - resetting")
-            IsFishing = false
-            ReelCooldown = false
+        -- Update status based on state
+        if CurrentState == FishingState.Waiting then
+            Stats.Status = "⏳ Waiting for bite..."
+        elseif CurrentState == FishingState.Idle and Config.Enabled then
+            Stats.Status = "🟢 Ready to cast"
         end
     end
 end)
 
 -- ════════════════════════════════════════════════════════
--- GUI (NICER!)
+-- GUI (DELTA STYLED)
 -- ════════════════════════════════════════════════════════
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "FischBalancedGUI"
+ScreenGui.Name = "DeltaFischGUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = PlayerGui
 
-local Main = Instance.new("Frame")
-Main.Parent = ScreenGui
-Main.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-Main.BorderSizePixel = 0
-Main.Position = UDim2.new(0.02, 0, 0.25, 0)
-Main.Size = UDim2.new(0, 350, 0, 320)
-Main.Active = true
-Main.Draggable = true
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MainFrame.BorderSizePixel = 0
+MainFrame.Position = UDim2.new(0.02, 0, 0.2, 0)
+MainFrame.Size = UDim2.new(0, 380, 0, 420)
+MainFrame.Active = true
+MainFrame.Draggable = true
 
-local Corner = Instance.new("UICorner")
-Corner.CornerRadius = UDim.new(0, 12)
-Corner.Parent = Main
+-- Styling
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 15)
+MainCorner.Parent = MainFrame
 
--- Glow effect
-local Glow = Instance.new("ImageLabel")
-Glow.Parent = Main
-Glow.BackgroundTransparency = 1
-Glow.Position = UDim2.new(0, -15, 0, -15)
-Glow.Size = UDim2.new(1, 30, 1, 30)
-Glow.Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"
-Glow.ImageColor3 = Color3.fromRGB(0, 150, 255)
-Glow.ImageTransparency = 0.8
-Glow.ZIndex = 0
+local Stroke = Instance.new("UIStroke")
+Stroke.Color = Color3.fromRGB(100, 200, 255)
+Stroke.Thickness = 2
+Stroke.Parent = MainFrame
 
--- Title bar
+-- Title
 local Title = Instance.new("TextLabel")
-Title.Parent = Main
-Title.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+Title.Parent = MainFrame
+Title.BackgroundColor3 = Color3.fromRGB(100, 200, 255)
 Title.BorderSizePixel = 0
-Title.Size = UDim2.new(1, 0, 0, 50)
+Title.Size = UDim2.new(1, 0, 0, 55)
 Title.Font = Enum.Font.GothamBold
-Title.Text = "🎣 FISCH AUTO - BALANCED"
+Title.Text = "🎣 FISCH AUTO - DELTA EXECUTOR"
 Title.TextColor3 = Color3.new(1, 1, 1)
-Title.TextSize = 17
-Title.ZIndex = 2
+Title.TextSize = 18
+Title.TextStrokeTransparency = 0
+Title.TextStrokeColor3 = Color3.new(0, 0, 0)
 
-local TCorner = Instance.new("UICorner")
-TCorner.CornerRadius = UDim.new(0, 12)
-TCorner.Parent = Title
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 15)
+TitleCorner.Parent = Title
 
-local TCover = Instance.new("Frame")
-TCover.Parent = Title
-TCover.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
-TCover.BorderSizePixel = 0
-TCover.Position = UDim2.new(0, 0, 0.6, 0)
-TCover.Size = UDim2.new(1, 0, 0.4, 0)
-TCover.ZIndex = 2
+local TitleCover = Instance.new("Frame")
+TitleCover.Parent = Title
+TitleCover.BackgroundColor3 = Color3.fromRGB(100, 200, 255)
+TitleCover.BorderSizePixel = 0
+TitleCover.Position = UDim2.new(0, 0, 0.6, 0)
+TitleCover.Size = UDim2.new(1, 0, 0.4, 0)
 
--- Status frame
+-- Status Display
 local StatusFrame = Instance.new("Frame")
-StatusFrame.Parent = Main
-StatusFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+StatusFrame.Parent = MainFrame
+StatusFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 StatusFrame.BorderSizePixel = 0
-StatusFrame.Position = UDim2.new(0, 15, 0, 60)
-StatusFrame.Size = UDim2.new(1, -30, 0, 120)
+StatusFrame.Position = UDim2.new(0, 15, 0, 70)
+StatusFrame.Size = UDim2.new(1, -30, 0, 140)
 
-local SCorner = Instance.new("UICorner")
-SCorner.CornerRadius = UDim.new(0, 8)
-SCorner.Parent = StatusFrame
+local StatusCorner = Instance.new("UICorner")
+StatusCorner.CornerRadius = UDim.new(0, 10)
+StatusCorner.Parent = StatusFrame
 
 local StatusLabel = Instance.new("TextLabel")
 StatusLabel.Parent = StatusFrame
@@ -425,147 +525,240 @@ StatusLabel.BackgroundTransparency = 1
 StatusLabel.Position = UDim2.new(0, 15, 0, 10)
 StatusLabel.Size = UDim2.new(1, -30, 1, -20)
 StatusLabel.Font = Enum.Font.Gotham
-StatusLabel.Text = "Ready to fish!"
-StatusLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+StatusLabel.Text = "Initializing..."
+StatusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 StatusLabel.TextSize = 13
 StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
 StatusLabel.TextYAlignment = Enum.TextYAlignment.Top
 
--- Update status
+-- Update status display
 task.spawn(function()
-    while task.wait(0.3) do
+    while task.wait(0.5) do
         if StatusLabel and StatusLabel.Parent then
             local runtime = tick() - Stats.StartTime
-            local m = math.floor(runtime / 60)
-            local s = math.floor(runtime % 60)
+            local hours = math.floor(runtime / 3600)
+            local minutes = math.floor((runtime % 3600) / 60)
+            local seconds = math.floor(runtime % 60)
             
             local remoteStatus = ""
-            if CastRemote then
-                remoteStatus = "✅ Cast: " .. CastRemote.Name .. "\n"
+            if FishingRemotes.Cast then
+                remoteStatus = remoteStatus .. "✅ Cast: " .. FishingRemotes.Cast.Name .. "\n"
             else
-                remoteStatus = "❌ Cast: Not found\n"
+                remoteStatus = remoteStatus .. "❌ Cast: Not detected\n"
             end
-            if ReelRemote then
-                remoteStatus = remoteStatus .. "✅ Reel: " .. ReelRemote.Name .. "\n"
+            
+            if FishingRemotes.Reel then
+                remoteStatus = remoteStatus .. "✅ Reel: " .. FishingRemotes.Reel.Name .. "\n"
             else
-                remoteStatus = remoteStatus .. "❌ Reel: Not found\n"
+                remoteStatus = remoteStatus .. "❌ Reel: Not detected\n"
             end
             
             StatusLabel.Text = string.format(
-                "%s\n\n%s\n🐟 Fish: %d | 🎣 Casts: %d | 🔄 Reels: %d\n⏱️ Runtime: %02d:%02d",
+                "Status: %s\nLast Action: %s\n\n%s\n" ..
+                "🐟 Fish Caught: %d\n🎣 Total Casts: %d\n✅ Successful Reels: %d\n" ..
+                "⏱️ Runtime: %02d:%02d:%02d",
                 Stats.Status,
+                Stats.LastAction,
                 remoteStatus,
-                Stats.Fish,
-                Stats.Casts,
-                Stats.Reels,
-                m, s
+                Stats.TotalFish,
+                Stats.TotalCasts,
+                Stats.SuccessfulReels,
+                hours, minutes, seconds
             )
         end
     end
 end)
 
--- Toggle button
-local Toggle = Instance.new("TextButton")
-Toggle.Parent = Main
-Toggle.BackgroundColor3 = Color3.fromRGB(220, 0, 0)
-Toggle.BorderSizePixel = 0
-Toggle.Position = UDim2.new(0, 15, 0, 190)
-Toggle.Size = UDim2.new(1, -30, 0, 50)
-Toggle.Font = Enum.Font.GothamBold
-Toggle.Text = "▶️ START FISHING"
-Toggle.TextColor3 = Color3.new(1, 1, 1)
-Toggle.TextSize = 16
+-- Control Buttons
+local ButtonsFrame = Instance.new("Frame")
+ButtonsFrame.Parent = MainFrame
+ButtonsFrame.BackgroundTransparency = 1
+ButtonsFrame.Position = UDim2.new(0, 15, 0, 220)
+ButtonsFrame.Size = UDim2.new(1, -30, 0, 140)
 
-local BCorner = Instance.new("UICorner")
-BCorner.CornerRadius = UDim.new(0, 8)
-BCorner.Parent = Toggle
+-- Main Toggle
+local MainToggle = Instance.new("TextButton")
+MainToggle.Parent = ButtonsFrame
+MainToggle.BackgroundColor3 = Color3.fromRGB(220, 0, 0)
+MainToggle.BorderSizePixel = 0
+MainToggle.Position = UDim2.new(0, 0, 0, 0)
+MainToggle.Size = UDim2.new(1, 0, 0, 50)
+MainToggle.Font = Enum.Font.GothamBold
+MainToggle.Text = "▶️ START AUTO FISHING"
+MainToggle.TextColor3 = Color3.new(1, 1, 1)
+MainToggle.TextSize = 16
+MainToggle.TextStrokeTransparency = 0
+MainToggle.TextStrokeColor3 = Color3.new(0, 0, 0)
 
-Toggle.MouseButton1Click:Connect(function()
+local MainToggleCorner = Instance.new("UICorner")
+MainToggleCorner.CornerRadius = UDim.new(0, 8)
+MainToggleCorner.Parent = MainToggle
+
+MainToggle.MouseButton1Click:Connect(function()
     Config.Enabled = not Config.Enabled
     
     if Config.Enabled then
-        Toggle.BackgroundColor3 = Color3.fromRGB(0, 220, 0)
-        Toggle.Text = "⏸️ STOP FISHING"
-        Log("✅ AUTO FISHING STARTED!")
-        Stats.Status = "🟢 Active"
+        MainToggle.BackgroundColor3 = Color3.fromRGB(0, 220, 0)
+        MainToggle.Text = "⏸️ STOP AUTO FISHING"
+        Debug("✅ DELTA AUTO FISHING STARTED!")
     else
-        Toggle.BackgroundColor3 = Color3.fromRGB(220, 0, 0)  
-        Toggle.Text = "▶️ START FISHING"
-        Log("⏹️ AUTO FISHING STOPPED")
-        IsFishing = false
+        MainToggle.BackgroundColor3 = Color3.fromRGB(220, 0, 0)
+        MainToggle.Text = "▶️ START AUTO FISHING"
+        CurrentState = FishingState.Idle
         ReelCooldown = false
-        Stats.Status = "🔴 Stopped"
+        Debug("⏹️ DELTA AUTO FISHING STOPPED!")
     end
 end)
 
--- Settings
-local yPos = 250
+-- Cast Toggle
+local CastToggle = Instance.new("TextButton")
+CastToggle.Parent = ButtonsFrame
+CastToggle.BackgroundColor3 = Config.AutoCast and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 0, 0)
+CastToggle.BorderSizePixel = 0
+CastToggle.Position = UDim2.new(0, 0, 0, 60)
+CastToggle.Size = UDim2.new(0.48, 0, 0, 35)
+CastToggle.Font = Enum.Font.Gotham
+CastToggle.Text = "🎣 Auto Cast: " .. (Config.AutoCast and "ON" or "OFF")
+CastToggle.TextColor3 = Color3.new(1, 1, 1)
+CastToggle.TextSize = 12
 
-local function CreateSlider(name, configKey, min, max, step)
-    local Label = Instance.new("TextLabel")
-    Label.Parent = Main
-    Label.BackgroundTransparency = 1
-    Label.Position = UDim2.new(0, 15, 0, yPos)
-    Label.Size = UDim2.new(0.6, 0, 0, 20)
-    Label.Font = Enum.Font.Gotham
-    Label.Text = name .. ": " .. Config[configKey] .. "s"
-    Label.TextColor3 = Color3.fromRGB(200, 200, 200)
-    Label.TextSize = 12
-    Label.TextXAlignment = Enum.TextXAlignment.Left
-    
-    yPos = yPos + 25
-end
+local CastToggleCorner = Instance.new("UICorner")
+CastToggleCorner.CornerRadius = UDim.new(0, 6)
+CastToggleCorner.Parent = CastToggle
 
-CreateSlider("Cast Delay", "CastDelay", 1, 10, 1)
+CastToggle.MouseButton1Click:Connect(function()
+    Config.AutoCast = not Config.AutoCast
+    CastToggle.BackgroundColor3 = Config.AutoCast and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 0, 0)
+    CastToggle.Text = "🎣 Auto Cast: " .. (Config.AutoCast and "ON" or "OFF")
+end)
 
--- Close button
-local Close = Instance.new("TextButton")
-Close.Parent = Main
-Close.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
-Close.BorderSizePixel = 0
-Close.Position = UDim2.new(0, 15, 0, 280)
-Close.Size = UDim2.new(1, -30, 0, 30)
-Close.Font = Enum.Font.Gotham
-Close.Text = "❌ CLOSE"
-Close.TextColor3 = Color3.new(1, 1, 1)
-Close.TextSize = 12
+-- Reel Toggle
+local ReelToggle = Instance.new("TextButton")
+ReelToggle.Parent = ButtonsFrame
+ReelToggle.BackgroundColor3 = Config.AutoReel and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 0, 0)
+ReelToggle.BorderSizePixel = 0
+ReelToggle.Position = UDim2.new(0.52, 0, 0, 60)
+ReelToggle.Size = UDim2.new(0.48, 0, 0, 35)
+ReelToggle.Font = Enum.Font.Gotham
+ReelToggle.Text = "🔄 Auto Reel: " .. (Config.AutoReel and "ON" or "OFF")
+ReelToggle.TextColor3 = Color3.new(1, 1, 1)
+ReelToggle.TextSize = 12
 
-local CCorner = Instance.new("UICorner")
-CCorner.CornerRadius = UDim.new(0, 6)
-CCorner.Parent = Close
+local ReelToggleCorner = Instance.new("UICorner")
+ReelToggleCorner.CornerRadius = UDim.new(0, 6)
+ReelToggleCorner.Parent = ReelToggle
 
-Close.MouseButton1Click:Connect(function()
-    ScreenGui:Destroy()
+ReelToggle.MouseButton1Click:Connect(function()
+    Config.AutoReel = not Config.AutoReel
+    ReelToggle.BackgroundColor3 = Config.AutoReel and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 0, 0)
+    ReelToggle.Text = "🔄 Auto Reel: " .. (Config.AutoReel and "ON" or "OFF")
+end)
+
+-- Close Button
+local CloseButton = Instance.new("TextButton")
+CloseButton.Parent = ButtonsFrame
+CloseButton.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
+CloseButton.BorderSizePixel = 0
+CloseButton.Position = UDim2.new(0, 0, 0, 105)
+CloseButton.Size = UDim2.new(1, 0, 0, 30)
+CloseButton.Font = Enum.Font.Gotham
+CloseButton.Text = "❌ CLOSE & DISABLE"
+CloseButton.TextColor3 = Color3.new(1, 1, 1)
+CloseButton.TextSize = 13
+
+local CloseButtonCorner = Instance.new("UICorner")
+CloseButtonCorner.CornerRadius = UDim.new(0, 6)
+CloseButtonCorner.Parent = CloseButton
+
+CloseButton.MouseButton1Click:Connect(function()
     Config.Enabled = false
+    ScreenGui:Destroy()
+    Debug("👋 GUI closed and auto fishing disabled")
 end)
 
--- Toggle GUI visibility
-UIS.InputBegan:Connect(function(input)
+-- Minimize/Maximize functionality
+local MinimizeButton = Instance.new("TextButton")
+MinimizeButton.Parent = Title
+MinimizeButton.BackgroundTransparency = 1
+MinimizeButton.Position = UDim2.new(1, -40, 0, 10)
+MinimizeButton.Size = UDim2.new(0, 30, 0, 30)
+MinimizeButton.Font = Enum.Font.GothamBold
+MinimizeButton.Text = "_"
+MinimizeButton.TextColor3 = Color3.new(1, 1, 1)
+MinimizeButton.TextSize = 20
+
+local isMinimized = false
+MinimizeButton.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    if isMinimized then
+        MainFrame.Size = UDim2.new(0, 380, 0, 55)
+        MinimizeButton.Text = "+"
+        StatusFrame.Visible = false
+        ButtonsFrame.Visible = false
+    else
+        MainFrame.Size = UDim2.new(0, 380, 0, 420)
+        MinimizeButton.Text = "_"
+        StatusFrame.Visible = true
+        ButtonsFrame.Visible = true
+    end
+end)
+
+-- Keyboard shortcut to toggle GUI
+Services.UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
     if input.KeyCode == Enum.KeyCode.Delete then
-        Main.Visible = not Main.Visible
+        MainFrame.Visible = not MainFrame.Visible
+    elseif input.KeyCode == Enum.KeyCode.F1 then
+        Config.Enabled = not Config.Enabled
+        if Config.Enabled then
+            MainToggle.BackgroundColor3 = Color3.fromRGB(0, 220, 0)
+            MainToggle.Text = "⏸️ STOP AUTO FISHING"
+        else
+            MainToggle.BackgroundColor3 = Color3.fromRGB(220, 0, 0)
+            MainToggle.Text = "▶️ START AUTO FISHING"
+            CurrentState = FishingState.Idle
+            ReelCooldown = false
+        end
     end
 end)
 
 -- ════════════════════════════════════════════════════════
--- STARTUP MESSAGE
+-- STARTUP COMPLETE
 -- ════════════════════════════════════════════════════════
 print("════════════════════════════════════════")
-print("✅ FISCH AUTO - BALANCED LOADED!")
+print("✅ FISCH AUTO - DELTA VERSION LOADED!")
 print("════════════════════════════════════════")
-print("✨ FEATURES:")
-print("  ✅ Smart remote detection")
-print("  ✅ Auto equip rod")
-print("  ✅ Safe tool activation")
-print("  ✅ UI detection")
-print("  ✅ No movement spam")
+print("🎮 DELTA EXECUTOR OPTIMIZED:")
+print("  ✅ Compatible input simulation")
+print("  ✅ Proper tool activation")
+print("  ✅ Smart UI detection")
+print("  ✅ Anti-AFK protection")
 print("")
-print("🎮 CONTROLS:")
-print("  - Click START to begin")
-print("  - Press DELETE to hide/show")
+print("⌨️ HOTKEYS:")
+print("  DELETE - Toggle GUI visibility")
+print("  F1 - Quick start/stop fishing")
+print("")
+print("🎯 DETECTED FEATURES:")
+if FishingRemotes.Cast then
+    print("  ✅ Cast Remote: " .. FishingRemotes.Cast.Name)
+else
+    print("  ⚠️ Cast Remote: Using fallback methods")
+end
+if FishingRemotes.Reel then
+    print("  ✅ Reel Remote: " .. FishingRemotes.Reel.Name)
+else
+    print("  ⚠️ Reel Remote: Using fallback methods")
+end
+if FishingRemotes.Shake then
+    print("  ✅ Shake Remote: " .. FishingRemotes.Shake.Name)
+else
+    print("  ⚠️ Shake Remote: Using fallback methods")
+end
+print("════════════════════════════════════════")
+print("🚀 Ready to fish! Click START button!")
 print("════════════════════════════════════════")
 
-if CastRemote and ReelRemote then
-    Log("🎉 All remotes found! Ready to fish!")
-else
-    Log("⚠️ Some remotes not detected, using fallback methods")
-end
+-- Initial setup
+Stats.Status = "🟢 Delta Executor Ready"
+Debug("🎉 DELTA FISCH AUTO successfully initialized!")
