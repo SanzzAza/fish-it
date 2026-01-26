@@ -1,11 +1,11 @@
 --[[
     ════════════════════════════════════════════════════════
-    🎣 FISCH AUTO - SPAM REEL + AUTO SELL FIXED!
-    JUAL TIAP 5 IKAN!
+    🎣 FISCH AUTO - MANUAL WAYPOINT SELL!
+    SET POSISI MERCHANT & FISHING MANUAL!
     ════════════════════════════════════════════════════════
 ]]
 
-print("🎣 LOADING SPAM REEL + AUTO SELL (FIXED)...")
+print("🎣 LOADING MANUAL WAYPOINT VERSION...")
 
 repeat task.wait() until game:IsLoaded()
 task.wait(2)
@@ -31,7 +31,7 @@ local Config = {
     Enabled = false,
     ClickSpeed = 0.03,
     AutoSell = true,
-    SellInterval = 5, -- JUAL TIAP 5 IKAN!
+    SellInterval = 5, -- JUAL TIAP 5 IKAN
 }
 
 local Stats = {
@@ -39,7 +39,14 @@ local Stats = {
     Casts = 0,
     Clicks = 0,
     Sells = 0,
-    Money = 0,
+}
+
+-- ════════════════════════════════════════════════════════
+-- WAYPOINTS (MANUAL SET!)
+-- ════════════════════════════════════════════════════════
+local Waypoints = {
+    Merchant = _G.MerchantPos, -- Set pakai command di atas!
+    Fishing = _G.FishingPos,   -- Set pakai command di atas!
 }
 
 -- ════════════════════════════════════════════════════════
@@ -49,22 +56,17 @@ local IsFishing = false
 local IsReeling = false
 local IsSelling = false
 local LastCast = 0
-local OriginalPosition = nil
 
 -- ════════════════════════════════════════════════════════
--- UPDATE CHARACTER REFERENCE
+-- CHARACTER UPDATE
 -- ════════════════════════════════════════════════════════
-local function UpdateCharacter()
-    local char = Player.Character or Player.CharacterAdded:Wait()
-    return char, char:WaitForChild("HumanoidRootPart")
+local function GetHRP()
+    local char = Player.Character
+    if char then
+        return char:FindFirstChild("HumanoidRootPart")
+    end
+    return nil
 end
-
-local Character, HRP = UpdateCharacter()
-
-Player.CharacterAdded:Connect(function(char)
-    Character = char
-    HRP = char:WaitForChild("HumanoidRootPart")
-end)
 
 -- ════════════════════════════════════════════════════════
 -- ANTI-AFK
@@ -77,203 +79,111 @@ Player.Idled:Connect(function()
 end)
 
 -- ════════════════════════════════════════════════════════
--- ADVANCED MERCHANT FINDER (MULTIPLE METHODS!)
+-- TELEPORT
 -- ════════════════════════════════════════════════════════
-local function FindMerchant()
-    print("🔍 Searching for merchant...")
-    
-    -- Method 1: Workspace NPCs
-    for _, npc in pairs(workspace:GetDescendants()) do
-        if npc:IsA("Model") and npc:FindFirstChild("Humanoid") then
-            local name = npc.Name:lower()
-            -- Nama umum merchant di Fisch
-            if name:find("merchant") or name:find("appraiser") or name:find("marc") or 
-               name:find("shipwright") or name:find("trader") or name:find("shop") then
-                local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Head")
-                if root then
-                    print("✅ Found NPC:", npc.Name)
-                    return npc, root
-                end
-            end
-        end
+local function TeleportTo(cframe)
+    local hrp = GetHRP()
+    if not hrp then 
+        warn("No HRP!")
+        return false
     end
     
-    -- Method 2: Cari berdasarkan ProximityPrompt dengan keyword "sell"
-    for _, obj in pairs(workspace:GetDescendants()) do
-        if obj:IsA("ProximityPrompt") then
-            local name = obj.Name:lower()
-            local parent = obj.Parent
-            
-            if name:find("sell") or name:find("apprai") or name:find("merchant") or name:find("shop") then
-                print("✅ Found sell prompt:", obj.Name, "in", parent.Name)
-                
-                -- Cari part terdekat
-                local targetPart = nil
-                if parent:IsA("BasePart") then
-                    targetPart = parent
-                elseif parent:IsA("Model") then
-                    targetPart = parent:FindFirstChild("HumanoidRootPart") or parent.PrimaryPart
-                end
-                
-                if targetPart then
-                    return parent, targetPart
-                end
-            end
-        end
-    end
-    
-    -- Method 3: Cari folder khusus
-    local npcs = workspace:FindFirstChild("NPCs") or workspace:FindFirstChild("Merchants") or workspace:FindFirstChild("world")
-    if npcs then
-        for _, npc in pairs(npcs:GetDescendants()) do
-            if npc:IsA("Model") then
-                local name = npc.Name:lower()
-                if name:find("merchant") or name:find("apprai") or name:find("marc") then
-                    local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Head")
-                    if root then
-                        print("✅ Found in folder:", npc.Name)
-                        return npc, root
-                    end
-                end
-            end
-        end
-    end
-    
-    warn("❌ Merchant not found!")
-    warn("💡 Tip: Pergi ke merchant dulu, lalu klik 'MANUAL SELL' untuk debug!")
-    return nil, nil
-end
-
--- ════════════════════════════════════════════════════════
--- TELEPORT FUNCTION (SAFE!)
--- ════════════════════════════════════════════════════════
-local function SafeTeleport(targetCFrame)
-    if not HRP then
-        Character, HRP = UpdateCharacter()
-    end
-    
-    -- Method 1: Instant TP
-    pcall(function()
-        HRP.CFrame = targetCFrame
-    end)
-    
+    -- Method 1: Instant
+    hrp.CFrame = cframe
     task.wait(0.3)
     
-    -- Method 2: Tween (smooth)
-    local tween = TweenService:Create(HRP, TweenInfo.new(0.5, Enum.EasingStyle.Linear), {CFrame = targetCFrame})
+    -- Method 2: Tween backup
+    local tween = TweenService:Create(hrp, TweenInfo.new(0.5), {CFrame = cframe})
     tween:Play()
-    tween.Completed:Wait()
+    
+    return true
 end
 
 -- ════════════════════════════════════════════════════════
--- AUTO SELL (IMPROVED!)
+-- AUTO SELL (MANUAL WAYPOINT!)
 -- ════════════════════════════════════════════════════════
 local function AutoSell()
     if IsSelling then return end
     IsSelling = true
     
     print("════════════════════════════════════════")
-    print("💰 STARTING AUTO SELL...")
+    print("💰 AUTO SELL STARTING...")
     print("════════════════════════════════════════")
     
-    -- Update character ref
-    Character, HRP = UpdateCharacter()
-    
-    -- Save posisi
-    if not OriginalPosition then
-        OriginalPosition = HRP.CFrame
-        print("📍 Saved fishing position")
-    end
-    
-    -- Cari merchant
-    local merchant, merchantPart = FindMerchant()
-    
-    if not merchant or not merchantPart then
-        warn("❌ SELL FAILED: Merchant not found!")
-        warn("💡 Coba manual: Pergi ke merchant, lalu tekan F7")
+    -- Check waypoint set
+    if not Waypoints.Merchant then
+        warn("❌ MERCHANT POSITION NOT SET!")
+        warn("💡 Run this at merchant:")
+        warn('_G.MerchantPos = game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame')
         IsSelling = false
         return
     end
     
-    print("📍 Merchant found:", merchant.Name)
-    print("📍 Teleporting...")
-    
-    -- TP ke merchant (dengan offset)
-    local targetPos = merchantPart.CFrame * CFrame.new(0, 2, 5)
-    SafeTeleport(targetPos)
-    
-    task.wait(0.5)
-    
-    -- SELL METHOD 1: ProximityPrompt
-    local sold = false
-    for _, prompt in pairs(merchant:GetDescendants()) do
-        if prompt:IsA("ProximityPrompt") then
-            print("💰 Trying ProximityPrompt:", prompt.Name)
-            
-            -- Fire multiple times
-            for i = 1, 3 do
-                pcall(function()
-                    fireproximityprompt(prompt)
-                end)
-                task.wait(0.2)
-            end
-            
-            sold = true
-            break
+    -- Save current position jika belum set fishing spot
+    if not Waypoints.Fishing then
+        local hrp = GetHRP()
+        if hrp then
+            Waypoints.Fishing = hrp.CFrame
+            print("📍 Auto-saved fishing position")
         end
     end
     
-    -- SELL METHOD 2: Spam E
-    print("💰 Spamming E key...")
-    for i = 1, 15 do
+    -- TP to merchant
+    print("📍 Teleporting to merchant...")
+    if not TeleportTo(Waypoints.Merchant) then
+        warn("❌ Teleport failed!")
+        IsSelling = false
+        return
+    end
+    
+    task.wait(1)
+    
+    -- SPAM SELL!
+    print("💰 Selling fish...")
+    
+    -- Method 1: E key spam
+    for i = 1, 20 do
         VIM:SendKeyEvent(true, "E", false, game)
         task.wait(0.05)
         VIM:SendKeyEvent(false, "E", false, game)
         task.wait(0.1)
     end
     
-    -- SELL METHOD 3: Click spam
-    print("💰 Click spam...")
-    for i = 1, 10 do
+    -- Method 2: Click spam
+    for i = 1, 15 do
         VIM:SendMouseButtonEvent(0, 0, 0, true, game, 0)
         task.wait(0.05)
         VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0)
         task.wait(0.1)
     end
     
-    -- SELL METHOD 4: Remote (cari semua kemungkinan)
+    -- Method 3: Try all possible remotes
     for _, remote in pairs(RS:GetDescendants()) do
-        if remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") then
+        if remote:IsA("RemoteEvent") then
             local name = remote.Name:lower()
-            if name:find("sell") or name:find("apprai") then
-                print("💰 Trying remote:", remote.Name)
+            if name:find("sell") or name:find("apprai") or name:find("merchant") then
                 pcall(function()
-                    if remote:IsA("RemoteEvent") then
-                        remote:FireServer()
-                        remote:FireServer("all") -- some games use parameter
-                    else
-                        remote:InvokeServer()
-                    end
+                    remote:FireServer()
+                    remote:FireServer("all")
                 end)
-                task.wait(0.2)
             end
         end
     end
     
-    task.wait(1)
+    task.wait(2)
     
     Stats.Sells = Stats.Sells + 1
-    print("✅ Sell attempt #" .. Stats.Sells .. " complete!")
+    print("✅ Sell complete! (#" .. Stats.Sells .. ")")
     
-    -- Balik ke fishing spot
-    if OriginalPosition then
+    -- Return to fishing
+    if Waypoints.Fishing then
         print("📍 Returning to fishing spot...")
-        SafeTeleport(OriginalPosition)
-        task.wait(0.5)
+        TeleportTo(Waypoints.Fishing)
+        task.wait(1)
     end
     
     print("════════════════════════════════════════")
-    print("✅ SELL COMPLETE! Resuming fishing...")
+    print("✅ RESUMING FISHING...")
     print("════════════════════════════════════════")
     
     IsSelling = false
@@ -303,9 +213,7 @@ local function EquipRod()
     if rod and rod.Parent == Backpack then
         Player.Character.Humanoid:EquipTool(rod)
         task.wait(0.3)
-        return true
     end
-    return rod ~= nil
 end
 
 -- ════════════════════════════════════════════════════════
@@ -313,25 +221,24 @@ end
 -- ════════════════════════════════════════════════════════
 local function HasReelUI()
     for _, gui in pairs(PlayerGui:GetChildren()) do
-        if gui:IsA("ScreenGui") and gui.Enabled and gui.Name ~= "FischSpamGUI" then
+        if gui:IsA("ScreenGui") and gui.Enabled and gui.Name ~= "FischManualGUI" then
             local reel = gui:FindFirstChild("reel", true)
             if reel and reel:IsA("GuiObject") and reel.Visible then
-                return true, reel
+                return true
             end
             
             for _, obj in pairs(gui:GetDescendants()) do
                 if obj:IsA("GuiObject") and obj.Visible then
                     local name = obj.Name:lower()
                     if name == "reel" or name == "safezone" or name == "bar" or 
-                       name == "reelbar" or name == "fishingbar" or name == "progress" or
-                       name == "playerbar" or name:find("reel") or name:find("safe") then
-                        return true, obj
+                       name == "reelbar" or name:find("reel") then
+                        return true
                     end
                 end
             end
         end
     end
-    return false, nil
+    return false
 end
 
 -- ════════════════════════════════════════════════════════
@@ -341,14 +248,12 @@ local function DoCast()
     if IsFishing or IsReeling or IsSelling or tick() - LastCast < 2 then return end
     
     Stats.Casts = Stats.Casts + 1
-    print("🎣 Casting #" .. Stats.Casts)
+    print("🎣 Cast #" .. Stats.Casts)
     
     EquipRod()
     
     local rod = GetRod()
-    if rod then
-        rod:Activate()
-    end
+    if rod then rod:Activate() end
     
     VIM:SendMouseButtonEvent(0, 0, 0, true, game, 0)
     task.wait(0.05)
@@ -373,17 +278,12 @@ local function StartSpamReel()
     if IsReeling then return end
     IsReeling = true
     
-    print("⚡ SPAM STARTED!")
-    
     local startTime = tick()
     local clickCount = 0
     
     ReelThread = task.spawn(function()
         while IsReeling and Config.Enabled do
-            local hasUI = HasReelUI()
-            
-            if not hasUI then
-                print("✅ UI hilang! Ikan masuk!")
+            if not HasReelUI() then
                 break
             end
             
@@ -396,36 +296,26 @@ local function StartSpamReel()
             
             task.wait(Config.ClickSpeed)
             
-            if tick() - startTime > 30 then
-                print("⏰ Timeout!")
-                break
-            end
+            if tick() - startTime > 30 then break end
         end
         
-        local duration = math.floor((tick() - startTime) * 1000)
         Stats.Fish = Stats.Fish + 1
-        print(string.format("✅ Fish #%d! (%d clicks, %dms)", Stats.Fish, clickCount, duration))
+        print(string.format("✅ Fish #%d! (%dms)", Stats.Fish, math.floor((tick()-startTime)*1000)))
         
         IsReeling = false
         IsFishing = false
         
-        -- AUTO SELL CHECK (TIAP 5 IKAN!)
-        if Config.AutoSell and Stats.Fish % Config.SellInterval == 0 then
-            print("💰 5 IKAN TERCAPAI! JUAL OTOMATIS...")
+        -- AUTO SELL CHECK - FIXED!
+        print("📊 Fish count: " .. Stats.Fish .. "/" .. Config.SellInterval)
+        
+        if Config.AutoSell and (Stats.Fish % Config.SellInterval == 0) then
+            print("💰💰💰 5 FISH REACHED! SELLING... 💰💰💰")
             task.wait(1)
-            AutoSell()
+            task.spawn(AutoSell) -- Spawn biar ga block
         else
             task.wait(1)
         end
     end)
-end
-
-local function StopSpamReel()
-    IsReeling = false
-    if ReelThread then
-        task.cancel(ReelThread)
-        ReelThread = nil
-    end
 end
 
 -- ════════════════════════════════════════════════════════
@@ -438,8 +328,7 @@ local function StartReelDetection()
     
     ReelDetection = RunService.RenderStepped:Connect(function()
         if Config.Enabled and IsFishing and not IsReeling and not IsSelling then
-            local hasUI = HasReelUI()
-            if hasUI then
+            if HasReelUI() then
                 StartSpamReel()
             end
         end
@@ -465,36 +354,10 @@ task.spawn(function()
 end)
 
 -- ════════════════════════════════════════════════════════
--- DEBUG COMMAND
--- ════════════════════════════════════════════════════════
-_G.FischDebug = function()
-    print("════════════════════════════════════════")
-    print("🔍 FISCH DEBUG INFO")
-    print("════════════════════════════════════════")
-    
-    local merchant, part = FindMerchant()
-    if merchant then
-        print("✅ Merchant:", merchant.Name)
-        print("✅ Position:", part.Position)
-        
-        -- List all prompts
-        for _, prompt in pairs(merchant:GetDescendants()) do
-            if prompt:IsA("ProximityPrompt") then
-                print("  → ProximityPrompt:", prompt.Name)
-            end
-        end
-    else
-        print("❌ No merchant found")
-    end
-    
-    print("════════════════════════════════════════")
-end
-
--- ════════════════════════════════════════════════════════
 -- GUI
 -- ════════════════════════════════════════════════════════
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "FischSpamGUI"
+ScreenGui.Name = "FischManualGUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = PlayerGui
 
@@ -502,44 +365,45 @@ local Main = Instance.new("Frame")
 Main.Parent = ScreenGui
 Main.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 Main.BorderSizePixel = 0
-Main.Position = UDim2.new(0.35, 0, 0.25, 0)
-Main.Size = UDim2.new(0, 340, 0, 280)
+Main.Position = UDim2.new(0.35, 0, 0.2, 0)
+Main.Size = UDim2.new(0, 350, 0, 340)
 Main.Active = true
 Main.Draggable = true
 
 Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 15)
 
 local Glow = Instance.new("UIStroke")
-Glow.Color = Color3.fromRGB(255, 215, 0)
+Glow.Color = Color3.fromRGB(0, 255, 255)
 Glow.Thickness = 3
 Glow.Parent = Main
 
 local Title = Instance.new("TextLabel")
 Title.Parent = Main
-Title.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
+Title.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
 Title.BorderSizePixel = 0
 Title.Size = UDim2.new(1, 0, 0, 50)
 Title.Font = Enum.Font.GothamBold
-Title.Text = "⚡💰 SELL TIAP 5 IKAN!"
+Title.Text = "📍 MANUAL WAYPOINT SELL"
 Title.TextColor3 = Color3.new(1, 1, 1)
-Title.TextSize = 17
+Title.TextSize = 16
 
 Instance.new("UICorner", Title).CornerRadius = UDim.new(0, 15)
 
 local TitleFix = Instance.new("Frame")
 TitleFix.Parent = Title
-TitleFix.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
+TitleFix.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
 TitleFix.BorderSizePixel = 0
 TitleFix.Position = UDim2.new(0, 0, 0.6, 0)
 TitleFix.Size = UDim2.new(1, 0, 0.4, 0)
 
+-- Stats
 local StatsLabel = Instance.new("TextLabel")
 StatsLabel.Parent = Main
 StatsLabel.BackgroundTransparency = 1
 StatsLabel.Position = UDim2.new(0, 15, 0, 60)
-StatsLabel.Size = UDim2.new(1, -30, 0, 100)
+StatsLabel.Size = UDim2.new(1, -30, 0, 90)
 StatsLabel.Font = Enum.Font.Gotham
-StatsLabel.Text = "Ready!"
+StatsLabel.Text = "Setup waypoints first!"
 StatsLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 StatsLabel.TextSize = 13
 StatsLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -548,43 +412,94 @@ StatsLabel.TextYAlignment = Enum.TextYAlignment.Top
 task.spawn(function()
     while task.wait(0.2) do
         pcall(function()
-            local status = Config.Enabled and "⚡ ACTIVE!" or "🔴 STOPPED"
-            local currentAction = ""
+            local status = Config.Enabled and "⚡ ACTIVE" or "🔴 STOPPED"
+            local action = ""
             
             if Config.Enabled then
-                if IsSelling then
-                    currentAction = "💰💰 SELLING! 💰💰"
-                elseif IsReeling then
-                    currentAction = "⚡⚡⚡ SPAMMING! ⚡⚡⚡"
-                elseif IsFishing then
-                    currentAction = "⏳ Waiting bite..."
-                else
-                    currentAction = "🎣 Casting..."
-                end
+                if IsSelling then action = "💰 SELLING!"
+                elseif IsReeling then action = "⚡ REELING!"
+                elseif IsFishing then action = "⏳ Waiting..."
+                else action = "🎣 Casting..." end
             end
             
             local nextSell = Config.SellInterval - (Stats.Fish % Config.SellInterval)
             if nextSell == 0 then nextSell = Config.SellInterval end
             
+            local merchantStatus = Waypoints.Merchant and "✅" or "❌"
+            local fishingStatus = Waypoints.Fishing and "✅" or "❌"
+            
             StatsLabel.Text = string.format(
-                "%s\n%s\n\n🐟 Fish: %d | 🎣 Casts: %d\n🖱️ Clicks: %d | 💰 Sells: %d\n\n📊 Sell in: %d fish",
-                status,
-                currentAction,
-                Stats.Fish,
-                Stats.Casts,
-                Stats.Clicks,
-                Stats.Sells,
-                nextSell
+                "%s | %s\n\n🐟 Fish: %d | Next sell: %d\n🎣 Casts: %d | 💰 Sells: %d\n\n%s Merchant | %s Fishing Spot",
+                status, action, Stats.Fish, nextSell, Stats.Casts, Stats.Sells,
+                merchantStatus, fishingStatus
             )
         end)
     end
 end)
 
+-- Waypoint Buttons
+local SetMerchant = Instance.new("TextButton")
+SetMerchant.Parent = Main
+SetMerchant.BackgroundColor3 = Color3.fromRGB(255, 100, 0)
+SetMerchant.BorderSizePixel = 0
+SetMerchant.Position = UDim2.new(0, 15, 0, 160)
+SetMerchant.Size = UDim2.new(0.48, -10, 0, 35)
+SetMerchant.Font = Enum.Font.GothamBold
+SetMerchant.Text = "📍 SET MERCHANT"
+SetMerchant.TextColor3 = Color3.new(1, 1, 1)
+SetMerchant.TextSize = 12
+
+Instance.new("UICorner", SetMerchant).CornerRadius = UDim.new(0, 8)
+
+SetMerchant.MouseButton1Click:Connect(function()
+    local hrp = GetHRP()
+    if hrp then
+        Waypoints.Merchant = hrp.CFrame
+        _G.MerchantPos = hrp.CFrame
+        print("✅ MERCHANT POSITION SAVED!")
+        print("Position:", Waypoints.Merchant)
+        SetMerchant.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+        SetMerchant.Text = "✅ MERCHANT SET"
+        task.wait(1)
+        SetMerchant.BackgroundColor3 = Color3.fromRGB(255, 100, 0)
+        SetMerchant.Text = "📍 SET MERCHANT"
+    end
+end)
+
+local SetFishing = Instance.new("TextButton")
+SetFishing.Parent = Main
+SetFishing.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+SetFishing.BorderSizePixel = 0
+SetFishing.Position = UDim2.new(0.52, 0, 0, 160)
+SetFishing.Size = UDim2.new(0.48, -15, 0, 35)
+SetFishing.Font = Enum.Font.GothamBold
+SetFishing.Text = "🎣 SET FISHING"
+SetFishing.TextColor3 = Color3.new(1, 1, 1)
+SetFishing.TextSize = 12
+
+Instance.new("UICorner", SetFishing).CornerRadius = UDim.new(0, 8)
+
+SetFishing.MouseButton1Click:Connect(function()
+    local hrp = GetHRP()
+    if hrp then
+        Waypoints.Fishing = hrp.CFrame
+        _G.FishingPos = hrp.CFrame
+        print("✅ FISHING POSITION SAVED!")
+        print("Position:", Waypoints.Fishing)
+        SetFishing.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+        SetFishing.Text = "✅ FISHING SET"
+        task.wait(1)
+        SetFishing.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+        SetFishing.Text = "🎣 SET FISHING"
+    end
+end)
+
+-- Auto Sell Toggle
 local SellToggle = Instance.new("TextButton")
 SellToggle.Parent = Main
 SellToggle.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
 SellToggle.BorderSizePixel = 0
-SellToggle.Position = UDim2.new(0, 15, 0, 170)
+SellToggle.Position = UDim2.new(0, 15, 0, 205)
 SellToggle.Size = UDim2.new(1, -30, 0, 35)
 SellToggle.Font = Enum.Font.GothamBold
 SellToggle.Text = "💰 AUTO SELL: ON (5 FISH)"
@@ -595,7 +510,6 @@ Instance.new("UICorner", SellToggle).CornerRadius = UDim.new(0, 8)
 
 SellToggle.MouseButton1Click:Connect(function()
     Config.AutoSell = not Config.AutoSell
-    
     if Config.AutoSell then
         SellToggle.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
         SellToggle.Text = "💰 AUTO SELL: ON (5 FISH)"
@@ -605,59 +519,71 @@ SellToggle.MouseButton1Click:Connect(function()
     end
 end)
 
+-- Manual Sell
 local ManualSell = Instance.new("TextButton")
 ManualSell.Parent = Main
 ManualSell.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
 ManualSell.BorderSizePixel = 0
-ManualSell.Position = UDim2.new(0, 15, 0, 210)
-ManualSell.Size = UDim2.new(1, -30, 0, 25)
+ManualSell.Position = UDim2.new(0, 15, 0, 250)
+ManualSell.Size = UDim2.new(1, -30, 0, 30)
 ManualSell.Font = Enum.Font.GothamBold
 ManualSell.Text = "🔧 MANUAL SELL NOW"
 ManualSell.TextColor3 = Color3.new(1, 1, 1)
-ManualSell.TextSize = 12
+ManualSell.TextSize = 13
 
-Instance.new("UICorner", ManualSell).CornerRadius = UDim.new(0, 6)
+Instance.new("UICorner", ManualSell).CornerRadius = UDim.new(0, 8)
 
 ManualSell.MouseButton1Click:Connect(function()
     if not IsSelling then
-        print("🔧 Manual sell triggered!")
         task.spawn(AutoSell)
     end
 end)
 
+-- Main Toggle
 local ToggleButton = Instance.new("TextButton")
 ToggleButton.Parent = Main
 ToggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
 ToggleButton.BorderSizePixel = 0
-ToggleButton.Position = UDim2.new(0, 15, 0, 240)
-ToggleButton.Size = UDim2.new(1, -30, 0, 30)
+ToggleButton.Position = UDim2.new(0, 15, 0, 290)
+ToggleButton.Size = UDim2.new(1, -30, 0, 40)
 ToggleButton.Font = Enum.Font.GothamBold
-ToggleButton.Text = "🔴 START"
+ToggleButton.Text = "🔴 START FISHING"
 ToggleButton.TextColor3 = Color3.new(1, 1, 1)
 ToggleButton.TextSize = 15
 
-Instance.new("UICorner", ToggleButton).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", ToggleButton).CornerRadius = UDim.new(0, 10)
 
 ToggleButton.MouseButton1Click:Connect(function()
     Config.Enabled = not Config.Enabled
     
     if Config.Enabled then
+        if not Waypoints.Merchant then
+            warn("⚠️ SET MERCHANT POSITION FIRST!")
+            Config.Enabled = false
+            return
+        end
+        
         ToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
         ToggleButton.Text = "⚡ STOP"
         Glow.Color = Color3.fromRGB(0, 255, 0)
         StartReelDetection()
         
-        Character, HRP = UpdateCharacter()
-        OriginalPosition = HRP.CFrame
+        if not Waypoints.Fishing then
+            local hrp = GetHRP()
+            if hrp then
+                Waypoints.Fishing = hrp.CFrame
+                print("📍 Auto-set fishing spot")
+            end
+        end
         
-        print("✅ STARTED! Jual tiap 5 ikan!")
+        print("✅ STARTED!")
     else
         ToggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-        ToggleButton.Text = "🔴 START"
-        Glow.Color = Color3.fromRGB(255, 215, 0)
+        ToggleButton.Text = "🔴 START FISHING"
+        Glow.Color = Color3.fromRGB(0, 255, 255)
         StopReelDetection()
-        StopSpamReel()
         IsFishing = false
+        IsReeling = false
         IsSelling = false
         print("❌ STOPPED!")
     end
@@ -670,28 +596,21 @@ UIS.InputBegan:Connect(function(input, processed)
     elseif input.KeyCode == Enum.KeyCode.F6 then
         ToggleButton.MouseButton1Click:Fire()
     elseif input.KeyCode == Enum.KeyCode.F7 then
-        if not IsSelling then
-            task.spawn(AutoSell)
-        end
-    elseif input.KeyCode == Enum.KeyCode.F8 then
-        _G.FischDebug()
+        if not IsSelling then task.spawn(AutoSell) end
     end
 end)
 
 print("════════════════════════════════════════")
-print("✅ FISCH AUTO LOADED!")
+print("✅ MANUAL WAYPOINT VERSION LOADED!")
 print("════════════════════════════════════════")
-print("💰 AUTO SELL: TIAP 5 IKAN!")
+print("📍 SETUP STEPS:")
+print("  1. Go to MERCHANT")
+print("  2. Click 'SET MERCHANT' button")
+print("  3. Go to FISHING SPOT")
+print("  4. Click 'SET FISHING' button")
+print("  5. Click 'START FISHING'")
 print("════════════════════════════════════════")
-print("🎮 Controls:")
-print("  DELETE = Hide/Show")
-print("  F6 = Toggle ON/OFF")
-print("  F7 = Manual Sell")
-print("  F8 = Debug (cek merchant)")
+print("💰 Will auto sell every 5 fish!")
 print("════════════════════════════════════════")
-print("💡 Kalau sell ga work:")
-print("  1. Pergi ke merchant")
-print("  2. Tekan F7 (manual sell)")
-print("  3. Tekan F8 (debug)")
-print("  4. Kasih tau nama NPC di console!")
+print("🎮 F6=Toggle | F7=Manual Sell | DEL=Hide")
 print("════════════════════════════════════════")
