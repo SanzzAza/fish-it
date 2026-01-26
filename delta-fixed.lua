@@ -1,10 +1,10 @@
 --[[
     ════════════════════════════════════════════════════════
-    🎣 FISCH AUTO - Inventory Sell + Compact GUI
+    🎣 FISCH AUTO - FIXED REEL DETECTION
     ════════════════════════════════════════════════════════
 ]]
 
-print("🎣 Loading...")
+print("🎣 Loading fixed version...")
 
 repeat task.wait() until game:IsLoaded()
 task.wait(2)
@@ -62,6 +62,90 @@ Player.Idled:Connect(function()
 end)
 
 -- ════════════════════════════════════════════════════════
+-- IMPROVED REEL UI DETECTION (MULTIPLE METHODS!)
+-- ════════════════════════════════════════════════════════
+local function HasReelUI()
+    -- METHOD 1: Check for any new GUI that appears
+    for _, gui in pairs(PlayerGui:GetChildren()) do
+        if gui:IsA("ScreenGui") and gui.Enabled and gui.Name ~= "CompactFischGUI" then
+            
+            -- A) Direct find "reel"
+            local reel = gui:FindFirstChild("reel", true)
+            if reel and reel.Visible then
+                print("🎯 Reel found (method A):", reel.Name)
+                return true
+            end
+            
+            -- B) Find common fishing UI elements
+            for _, obj in pairs(gui:GetDescendants()) do
+                if obj:IsA("GuiObject") and obj.Visible then
+                    local name = obj.Name:lower()
+                    
+                    -- Common names in Fisch
+                    if name == "reel" or name == "safezone" or name == "bar" or 
+                       name == "reelbar" or name == "playerbar" or name == "fishbar" or
+                       name == "progress" or name:find("reel") or name:find("safe") or
+                       name:find("minigame") then
+                        print("🎯 Reel found (method B):", obj.Name, "in", gui.Name)
+                        return true
+                    end
+                    
+                    -- Check for ImageLabel/Frame with specific size (common for minigames)
+                    if (obj:IsA("Frame") or obj:IsA("ImageLabel")) and 
+                       obj.AbsoluteSize.Y > 100 and obj.AbsoluteSize.Y < 600 then
+                        
+                        -- Check if it has children (bar, safezone, etc)
+                        local hasBar = obj:FindFirstChild("bar", true) or 
+                                      obj:FindFirstChild("playerbar", true) or
+                                      obj:FindFirstChild("safezone", true)
+                        
+                        if hasBar then
+                            print("🎯 Reel found (method C - structure):", obj.Name)
+                            return true
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    return false
+end
+
+-- METHOD 2: Check if a NEW GUI appeared (alternative detection)
+local KnownGUIs = {}
+
+local function DetectNewGUI()
+    for _, gui in pairs(PlayerGui:GetChildren()) do
+        if gui:IsA("ScreenGui") and gui.Enabled and gui.Name ~= "CompactFischGUI" then
+            if not KnownGUIs[gui] then
+                -- New GUI appeared!
+                print("🆕 New GUI appeared:", gui.Name)
+                
+                -- Check if it's a reel GUI
+                task.wait(0.1)
+                if gui:FindFirstChildOfClass("Frame") or gui:FindFirstChildOfClass("ImageLabel") then
+                    print("🎯 Likely reel GUI:", gui.Name)
+                    KnownGUIs[gui] = true
+                    return true
+                end
+                
+                KnownGUIs[gui] = true
+            end
+        end
+    end
+    
+    -- Clean up removed GUIs
+    for gui in pairs(KnownGUIs) do
+        if not gui.Parent then
+            KnownGUIs[gui] = nil
+        end
+    end
+    
+    return false
+end
+
+-- ════════════════════════════════════════════════════════
 -- TELEPORT
 -- ════════════════════════════════════════════════════════
 local function TeleportTo(cframe)
@@ -75,47 +159,16 @@ local function TeleportTo(cframe)
 end
 
 -- ════════════════════════════════════════════════════════
--- IMPROVED SELL - DENGAN INVENTORY INTERACTION!
+-- AUTO SELL
 -- ════════════════════════════════════════════════════════
-local function OpenInventory()
-    -- Method 1: Tekan I atau Tab (common inventory keys)
-    for _, key in pairs({"I", "Tab", "B"}) do
-        VIM:SendKeyEvent(true, key, false, game)
-        task.wait(0.1)
-        VIM:SendKeyEvent(false, key, false, game)
-        task.wait(0.3)
-    end
-end
-
-local function ClickSellAll()
-    -- Cari button "Sell All" atau sejenisnya di GUI
-    for _, gui in pairs(PlayerGui:GetDescendants()) do
-        if gui:IsA("TextButton") then
-            local text = gui.Text:lower()
-            if text:find("sell") or text:find("jual") then
-                print("💰 Found sell button:", gui.Text)
-                
-                -- Simulate click
-                for i = 1, 3 do
-                    firesignal(gui.MouseButton1Click)
-                    task.wait(0.2)
-                end
-                
-                return true
-            end
-        end
-    end
-    return false
-end
-
 local function AutoSell()
     if IsSelling then return end
     IsSelling = true
     
-    print("💰 Starting sell...")
+    print("💰 Selling...")
     
     if not Waypoints.Merchant then
-        warn("❌ Set merchant first!")
+        warn("❌ Set merchant!")
         IsSelling = false
         return
     end
@@ -125,61 +178,29 @@ local function AutoSell()
         if hrp then Waypoints.Fishing = hrp.CFrame end
     end
     
-    -- TP to merchant
-    print("📍 TP to merchant...")
     TeleportTo(Waypoints.Merchant)
     task.wait(1.5)
     
-    -- Method 1: Open inventory
-    print("💰 Opening inventory...")
-    OpenInventory()
-    task.wait(1)
-    
-    -- Method 2: Click sell button in GUI
-    if ClickSellAll() then
-        print("✅ Clicked sell button!")
-        task.wait(2)
-    else
-        -- Fallback: Spam E and Click
-        print("💰 Spamming E + Click...")
-        
-        for i = 1, 25 do
-            VIM:SendKeyEvent(true, "E", false, game)
-            task.wait(0.05)
-            VIM:SendKeyEvent(false, "E", false, game)
-            task.wait(0.05)
-        end
-        
-        task.wait(0.5)
-        
-        for i = 1, 20 do
-            VIM:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-            task.wait(0.05)
-            VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-            task.wait(0.05)
-        end
+    -- Spam sell
+    for i = 1, 25 do
+        VIM:SendKeyEvent(true, "E", false, game)
+        task.wait(0.05)
+        VIM:SendKeyEvent(false, "E", false, game)
+        task.wait(0.08)
     end
     
-    -- Method 3: Try remotes
-    for _, remote in pairs(RS:GetDescendants()) do
-        if remote:IsA("RemoteEvent") then
-            local name = remote.Name:lower()
-            if name:find("sell") or name:find("apprai") then
-                pcall(function()
-                    remote:FireServer()
-                    remote:FireServer("all")
-                end)
-            end
-        end
+    for i = 1, 20 do
+        VIM:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+        task.wait(0.05)
+        VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+        task.wait(0.08)
     end
     
     task.wait(2)
     Stats.Sells = Stats.Sells + 1
     print("✅ Sell #" .. Stats.Sells)
     
-    -- Return
     if Waypoints.Fishing then
-        print("📍 Returning...")
         TeleportTo(Waypoints.Fishing)
         task.wait(1)
     end
@@ -188,7 +209,7 @@ local function AutoSell()
 end
 
 -- ════════════════════════════════════════════════════════
--- FISHING FUNCTIONS
+-- ROD
 -- ════════════════════════════════════════════════════════
 local function GetRod()
     if Player.Character then
@@ -213,31 +234,15 @@ local function EquipRod()
     end
 end
 
-local function HasReelUI()
-    for _, gui in pairs(PlayerGui:GetChildren()) do
-        if gui:IsA("ScreenGui") and gui.Enabled and gui.Name ~= "CompactFischGUI" then
-            local reel = gui:FindFirstChild("reel", true)
-            if reel and reel:IsA("GuiObject") and reel.Visible then
-                return true
-            end
-            
-            for _, obj in pairs(gui:GetDescendants()) do
-                if obj:IsA("GuiObject") and obj.Visible then
-                    local name = obj.Name:lower()
-                    if name == "reel" or name:find("reel") or name == "safezone" or name == "bar" then
-                        return true
-                    end
-                end
-            end
-        end
-    end
-    return false
-end
-
+-- ════════════════════════════════════════════════════════
+-- CAST
+-- ════════════════════════════════════════════════════════
 local function DoCast()
     if IsFishing or IsReeling or IsSelling or tick() - LastCast < 2 then return end
     
     Stats.Casts = Stats.Casts + 1
+    print("🎣 Cast #" .. Stats.Casts)
+    
     EquipRod()
     
     local rod = GetRod()
@@ -250,39 +255,75 @@ local function DoCast()
     IsFishing = true
     LastCast = tick()
     
-    task.delay(20, function()
-        if IsFishing and not IsReeling then IsFishing = false end
+    task.delay(25, function()
+        if IsFishing and not IsReeling then 
+            print("⏰ Cast timeout, recasting...")
+            IsFishing = false 
+        end
     end)
 end
 
+-- ════════════════════════════════════════════════════════
+-- SPAM REEL (IMPROVED!)
+-- ════════════════════════════════════════════════════════
 local ReelThread = nil
 
 local function StartSpamReel()
     if IsReeling then return end
     IsReeling = true
     
+    print("⚡⚡⚡ REEL STARTED! ⚡⚡⚡")
+    
     ReelThread = task.spawn(function()
         local startTime = tick()
+        local clicks = 0
+        local hadUI = true
         
         while IsReeling and Config.Enabled do
-            if not HasReelUI() then break end
+            local hasUI = HasReelUI()
             
+            -- If UI disappeared after being present = fish caught!
+            if not hasUI and hadUI and tick() - startTime > 0.5 then
+                print("✅ UI disappeared = Fish caught!")
+                break
+            end
+            
+            hadUI = hasUI or hadUI -- Keep track if we ever had UI
+            
+            -- Spam click
             VIM:SendMouseButtonEvent(0, 0, 0, true, game, 0)
             task.wait(0.01)
             VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+            
+            clicks = clicks + 1
+            
             task.wait(Config.ClickSpeed)
             
-            if tick() - startTime > 30 then break end
+            -- Timeout after 30s
+            if tick() - startTime > 30 then 
+                print("⏰ Reel timeout!")
+                break 
+            end
         end
         
+        local duration = math.floor((tick() - startTime) * 1000)
         Stats.Fish = Stats.Fish + 1
-        print("🐟 Fish #" .. Stats.Fish)
+        
+        print("════════════════════════════════════════")
+        print(string.format("🐟 FISH #%d! (%dms, %d clicks)", Stats.Fish, duration, clicks))
+        print("════════════════════════════════════════")
         
         IsReeling = false
         IsFishing = false
         
+        -- Check sell
+        local nextSell = Config.SellInterval - (Stats.Fish % Config.SellInterval)
+        if nextSell == 0 then nextSell = Config.SellInterval end
+        
+        print("Next sell in:", nextSell, "fish")
+        
         if Config.AutoSell and (Stats.Fish % Config.SellInterval == 0) then
-            print("💰 Selling...")
+            print("💰💰💰 TIME TO SELL! 💰💰💰")
             task.wait(1)
             task.spawn(AutoSell)
         else
@@ -291,13 +332,33 @@ local function StartSpamReel()
     end)
 end
 
+-- ════════════════════════════════════════════════════════
+-- DETECTION (DUAL METHOD!)
+-- ════════════════════════════════════════════════════════
 local ReelDetection = nil
 
 local function StartReelDetection()
     if ReelDetection then return end
+    
+    print("✅ Starting reel detection (60 FPS + GUI monitoring)...")
+    
     ReelDetection = RunService.RenderStepped:Connect(function()
         if Config.Enabled and IsFishing and not IsReeling and not IsSelling then
-            if HasReelUI() then StartSpamReel() end
+            
+            -- Method 1: Check UI
+            if HasReelUI() then
+                print("🎯 REEL UI DETECTED!")
+                StartSpamReel()
+                return
+            end
+            
+            -- Method 2: New GUI appeared
+            if DetectNewGUI() then
+                print("🎯 NEW GUI DETECTED!")
+                task.wait(0.2)
+                StartSpamReel()
+                return
+            end
         end
     end)
 end
@@ -309,6 +370,9 @@ local function StopReelDetection()
     end
 end
 
+-- ════════════════════════════════════════════════════════
+-- MAIN LOOP
+-- ════════════════════════════════════════════════════════
 task.spawn(function()
     while task.wait(0.5) do
         if Config.Enabled and not IsFishing and not IsReeling and not IsSelling then
@@ -318,7 +382,7 @@ task.spawn(function()
 end)
 
 -- ════════════════════════════════════════════════════════
--- COMPACT GUI WITH MINIMIZE
+-- GUI (COMPACT + MINIMIZABLE)
 -- ════════════════════════════════════════════════════════
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "CompactFischGUI"
@@ -340,7 +404,6 @@ local Glow = Instance.new("UIStroke", Main)
 Glow.Color = Color3.fromRGB(0, 200, 255)
 Glow.Thickness = 2
 
--- Header (clickable to minimize)
 local Header = Instance.new("TextButton")
 Header.Parent = Main
 Header.BackgroundColor3 = Color3.fromRGB(0, 150, 200)
@@ -359,24 +422,23 @@ HeaderFix.BorderSizePixel = 0
 HeaderFix.Position = UDim2.new(0, 0, 0.5, 0)
 HeaderFix.Size = UDim2.new(1, 0, 0.5, 0)
 
--- Content (will be hidden when minimized)
 local Content = Instance.new("Frame")
 Content.Parent = Main
 Content.BackgroundTransparency = 1
 Content.Position = UDim2.new(0, 0, 0, 25)
 Content.Size = UDim2.new(1, 0, 1, -25)
 
-local Stats = Instance.new("TextLabel")
-Stats.Parent = Content
-Stats.BackgroundTransparency = 1
-Stats.Position = UDim2.new(0, 10, 0, 5)
-Stats.Size = UDim2.new(1, -20, 0, 60)
-Stats.Font = Enum.Font.Gotham
-Stats.Text = "Ready"
-Stats.TextColor3 = Color3.new(1, 1, 1)
-Stats.TextSize = 10
-Stats.TextXAlignment = Enum.TextXAlignment.Left
-Stats.TextYAlignment = Enum.TextYAlignment.Top
+local StatsLabel = Instance.new("TextLabel")
+StatsLabel.Parent = Content
+StatsLabel.BackgroundTransparency = 1
+StatsLabel.Position = UDim2.new(0, 10, 0, 5)
+StatsLabel.Size = UDim2.new(1, -20, 0, 60)
+StatsLabel.Font = Enum.Font.Gotham
+StatsLabel.Text = "Ready"
+StatsLabel.TextColor3 = Color3.new(1, 1, 1)
+StatsLabel.TextSize = 10
+StatsLabel.TextXAlignment = Enum.TextXAlignment.Left
+StatsLabel.TextYAlignment = Enum.TextYAlignment.Top
 
 task.spawn(function()
     while task.wait(0.3) do
@@ -386,17 +448,18 @@ task.spawn(function()
             local nextSell = Config.SellInterval - (Stats.Fish % Config.SellInterval)
             if nextSell == 0 then nextSell = Config.SellInterval end
             
-            Stats.Text = string.format(
-                "%s %s\n🐟 %d/%d | 🎣 %d\n💰 Sells: %d",
-                status, action,
-                Stats.Fish, Config.SellInterval,
+            local hasUI = HasReelUI() and "👁️" or "❌"
+            
+            StatsLabel.Text = string.format(
+                "%s %s | UI:%s\n🐟 %d/%d | Next:%d\n🎣 %d | 💰 %d",
+                status, action, hasUI,
+                Stats.Fish, Config.SellInterval, nextSell,
                 Stats.Casts, Stats.Sells
             )
         end)
     end
 end)
 
--- Buttons
 local function CreateButton(text, pos, color, callback)
     local btn = Instance.new("TextButton")
     btn.Parent = Content
@@ -413,7 +476,7 @@ local function CreateButton(text, pos, color, callback)
     return btn
 end
 
-local SetMerchantBtn = CreateButton("📍 Merchant", UDim2.new(0, 10, 0, 70), Color3.fromRGB(255, 100, 0), function()
+CreateButton("📍 Merchant", UDim2.new(0, 10, 0, 70), Color3.fromRGB(255, 100, 0), function()
     local hrp = GetHRP()
     if hrp then
         Waypoints.Merchant = hrp.CFrame
@@ -422,7 +485,7 @@ local SetMerchantBtn = CreateButton("📍 Merchant", UDim2.new(0, 10, 0, 70), Co
     end
 end)
 
-local SetFishingBtn = CreateButton("🎣 Fishing", UDim2.new(0, 10, 0, 95), Color3.fromRGB(0, 150, 255), function()
+CreateButton("🎣 Fishing", UDim2.new(0, 10, 0, 95), Color3.fromRGB(0, 150, 255), function()
     local hrp = GetHRP()
     if hrp then
         Waypoints.Fishing = hrp.CFrame
@@ -431,7 +494,7 @@ local SetFishingBtn = CreateButton("🎣 Fishing", UDim2.new(0, 10, 0, 95), Colo
     end
 end)
 
-local SellBtn = CreateButton("💰 Sell Now", UDim2.new(0, 10, 0, 120), Color3.fromRGB(255, 165, 0), function()
+CreateButton("💰 Sell Now", UDim2.new(0, 10, 0, 120), Color3.fromRGB(255, 165, 0), function()
     if not IsSelling then task.spawn(AutoSell) end
 end)
 
@@ -455,7 +518,7 @@ local ToggleBtn = CreateButton("🔴 START", UDim2.new(0, 10, 0, 145), Color3.fr
             if hrp then Waypoints.Fishing = hrp.CFrame end
         end
         
-        print("✅ Started!")
+        print("✅ Started! Watch for '🎯 REEL UI DETECTED!' messages")
     else
         ToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
         ToggleBtn.Text = "🔴 START"
@@ -468,7 +531,6 @@ local ToggleBtn = CreateButton("🔴 START", UDim2.new(0, 10, 0, 145), Color3.fr
     end
 end)
 
--- Minimize functionality
 local isMinimized = false
 
 Header.MouseButton1Click:Connect(function()
@@ -485,7 +547,6 @@ Header.MouseButton1Click:Connect(function()
     end
 end)
 
--- Keybinds
 UIS.InputBegan:Connect(function(input, processed)
     if processed then return end
     
@@ -501,21 +562,17 @@ UIS.InputBegan:Connect(function(input, processed)
 end)
 
 print("════════════════════════════════════════")
-print("✅ COMPACT GUI LOADED!")
+print("✅ FIXED VERSION LOADED!")
 print("════════════════════════════════════════")
-print("📦 Features:")
-print("  ✅ Inventory-based sell")
-print("  ✅ Minimizable GUI (click header)")
-print("  ✅ Small & clean design")
+print("🔧 Improvements:")
+print("  ✅ Multiple UI detection methods")
+print("  ✅ New GUI monitoring")
+print("  ✅ Better timeout handling")
+print("  ✅ Real-time UI indicator (👁️/❌)")
 print("════════════════════════════════════════")
-print("🎮 Controls:")
-print("  F6 = Toggle ON/OFF")
-print("  F7 = Manual Sell")
-print("  F8 = Minimize")
-print("  DELETE = Hide/Show")
+print("📺 Watch console for:")
+print("  '🎯 REEL UI DETECTED!'")
+print("  '🐟 FISH #X!'")
 print("════════════════════════════════════════")
-print("📍 Setup:")
-print("  1. Go to merchant → Click 📍 Merchant")
-print("  2. Go to fishing → Click 🎣 Fishing")
-print("  3. Click START")
+print("🎮 F6=Toggle | F7=Sell | F8=Minimize")
 print("════════════════════════════════════════")
