@@ -1,11 +1,11 @@
 --[[
     ════════════════════════════════════════════════════════
-    🎣 FISCH AUTO - SPAM REEL + AUTO SELL!
-    CLICK TERUS + JUAL OTOMATIS!
+    🎣 FISCH AUTO - SPAM REEL + AUTO SELL FIXED!
+    JUAL TIAP 5 IKAN!
     ════════════════════════════════════════════════════════
 ]]
 
-print("🎣 LOADING SPAM REEL + AUTO SELL...")
+print("🎣 LOADING SPAM REEL + AUTO SELL (FIXED)...")
 
 repeat task.wait() until game:IsLoaded()
 task.wait(2)
@@ -18,12 +18,11 @@ local RS = game:GetService("ReplicatedStorage")
 local UIS = game:GetService("UserInputService")
 local VIM = game:GetService("VirtualInputManager")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 
 local Player = Players.LocalPlayer
 local PlayerGui = Player:WaitForChild("PlayerGui")
 local Backpack = Player:WaitForChild("Backpack")
-local Character = Player.Character or Player.CharacterAdded:Wait()
-local HRP = Character:WaitForChild("HumanoidRootPart")
 
 -- ════════════════════════════════════════════════════════
 -- CONFIG
@@ -32,7 +31,7 @@ local Config = {
     Enabled = false,
     ClickSpeed = 0.03,
     AutoSell = true,
-    SellInterval = 20, -- Jual setiap 20 ikan
+    SellInterval = 5, -- JUAL TIAP 5 IKAN!
 }
 
 local Stats = {
@@ -53,6 +52,21 @@ local LastCast = 0
 local OriginalPosition = nil
 
 -- ════════════════════════════════════════════════════════
+-- UPDATE CHARACTER REFERENCE
+-- ════════════════════════════════════════════════════════
+local function UpdateCharacter()
+    local char = Player.Character or Player.CharacterAdded:Wait()
+    return char, char:WaitForChild("HumanoidRootPart")
+end
+
+local Character, HRP = UpdateCharacter()
+
+Player.CharacterAdded:Connect(function(char)
+    Character = char
+    HRP = char:WaitForChild("HumanoidRootPart")
+end)
+
+-- ════════════════════════════════════════════════════════
 -- ANTI-AFK
 -- ════════════════════════════════════════════════════════
 Player.Idled:Connect(function()
@@ -63,147 +77,206 @@ Player.Idled:Connect(function()
 end)
 
 -- ════════════════════════════════════════════════════════
--- FIND NPC MERCHANT/APPRAISER
+-- ADVANCED MERCHANT FINDER (MULTIPLE METHODS!)
 -- ════════════════════════════════════════════════════════
 local function FindMerchant()
-    -- Method 1: Cari di Workspace
+    print("🔍 Searching for merchant...")
+    
+    -- Method 1: Workspace NPCs
     for _, npc in pairs(workspace:GetDescendants()) do
-        if npc:IsA("Model") then
+        if npc:IsA("Model") and npc:FindFirstChild("Humanoid") then
             local name = npc.Name:lower()
-            -- Nama NPC merchant di Fisch biasanya "Merchant", "Appraiser", "Shipwright", dll
-            if name:find("merchant") or name:find("appraiser") or name:find("marc") then
-                if npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Head") then
-                    print("✅ Found merchant:", npc.Name)
-                    return npc
+            -- Nama umum merchant di Fisch
+            if name:find("merchant") or name:find("appraiser") or name:find("marc") or 
+               name:find("shipwright") or name:find("trader") or name:find("shop") then
+                local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Head")
+                if root then
+                    print("✅ Found NPC:", npc.Name)
+                    return npc, root
                 end
             end
         end
     end
     
-    -- Method 2: Cari ProximityPrompt (interact point)
-    for _, prompt in pairs(workspace:GetDescendants()) do
-        if prompt:IsA("ProximityPrompt") then
-            local name = prompt.Name:lower()
-            if name:find("sell") or name:find("apprai") or name:find("merchant") then
-                print("✅ Found sell prompt:", prompt.Name)
-                return prompt.Parent
+    -- Method 2: Cari berdasarkan ProximityPrompt dengan keyword "sell"
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if obj:IsA("ProximityPrompt") then
+            local name = obj.Name:lower()
+            local parent = obj.Parent
+            
+            if name:find("sell") or name:find("apprai") or name:find("merchant") or name:find("shop") then
+                print("✅ Found sell prompt:", obj.Name, "in", parent.Name)
+                
+                -- Cari part terdekat
+                local targetPart = nil
+                if parent:IsA("BasePart") then
+                    targetPart = parent
+                elseif parent:IsA("Model") then
+                    targetPart = parent:FindFirstChild("HumanoidRootPart") or parent.PrimaryPart
+                end
+                
+                if targetPart then
+                    return parent, targetPart
+                end
             end
         end
     end
     
-    warn("❌ Merchant not found! (Mungkin nama NPC berbeda)")
-    return nil
+    -- Method 3: Cari folder khusus
+    local npcs = workspace:FindFirstChild("NPCs") or workspace:FindFirstChild("Merchants") or workspace:FindFirstChild("world")
+    if npcs then
+        for _, npc in pairs(npcs:GetDescendants()) do
+            if npc:IsA("Model") then
+                local name = npc.Name:lower()
+                if name:find("merchant") or name:find("apprai") or name:find("marc") then
+                    local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Head")
+                    if root then
+                        print("✅ Found in folder:", npc.Name)
+                        return npc, root
+                    end
+                end
+            end
+        end
+    end
+    
+    warn("❌ Merchant not found!")
+    warn("💡 Tip: Pergi ke merchant dulu, lalu klik 'MANUAL SELL' untuk debug!")
+    return nil, nil
 end
 
 -- ════════════════════════════════════════════════════════
--- AUTO SELL FUNCTION
+-- TELEPORT FUNCTION (SAFE!)
+-- ════════════════════════════════════════════════════════
+local function SafeTeleport(targetCFrame)
+    if not HRP then
+        Character, HRP = UpdateCharacter()
+    end
+    
+    -- Method 1: Instant TP
+    pcall(function()
+        HRP.CFrame = targetCFrame
+    end)
+    
+    task.wait(0.3)
+    
+    -- Method 2: Tween (smooth)
+    local tween = TweenService:Create(HRP, TweenInfo.new(0.5, Enum.EasingStyle.Linear), {CFrame = targetCFrame})
+    tween:Play()
+    tween.Completed:Wait()
+end
+
+-- ════════════════════════════════════════════════════════
+-- AUTO SELL (IMPROVED!)
 -- ════════════════════════════════════════════════════════
 local function AutoSell()
     if IsSelling then return end
     IsSelling = true
     
-    print("💰 Starting auto sell...")
+    print("════════════════════════════════════════")
+    print("💰 STARTING AUTO SELL...")
+    print("════════════════════════════════════════")
     
-    -- Save posisi awal
+    -- Update character ref
+    Character, HRP = UpdateCharacter()
+    
+    -- Save posisi
     if not OriginalPosition then
         OriginalPosition = HRP.CFrame
+        print("📍 Saved fishing position")
     end
     
     -- Cari merchant
-    local merchant = FindMerchant()
+    local merchant, merchantPart = FindMerchant()
     
-    if not merchant then
-        warn("❌ Can't find merchant! Skipping sell...")
+    if not merchant or not merchantPart then
+        warn("❌ SELL FAILED: Merchant not found!")
+        warn("💡 Coba manual: Pergi ke merchant, lalu tekan F7")
         IsSelling = false
         return
     end
     
-    -- Teleport ke merchant
-    local merchantPos = merchant:FindFirstChild("HumanoidRootPart") or merchant:FindFirstChild("Head") or merchant.PrimaryPart
+    print("📍 Merchant found:", merchant.Name)
+    print("📍 Teleporting...")
     
-    if not merchantPos then
-        warn("❌ Merchant has no position!")
-        IsSelling = false
-        return
-    end
-    
-    print("📍 Teleporting to merchant...")
-    
-    -- Teleport (dengan offset biar ga di dalam NPC)
-    local targetPos = merchantPos.CFrame * CFrame.new(0, 0, 5)
-    HRP.CFrame = targetPos
+    -- TP ke merchant (dengan offset)
+    local targetPos = merchantPart.CFrame * CFrame.new(0, 2, 5)
+    SafeTeleport(targetPos)
     
     task.wait(0.5)
     
-    -- Method 1: Cari ProximityPrompt
-    local sellPrompt = nil
+    -- SELL METHOD 1: ProximityPrompt
+    local sold = false
     for _, prompt in pairs(merchant:GetDescendants()) do
         if prompt:IsA("ProximityPrompt") then
-            sellPrompt = prompt
+            print("💰 Trying ProximityPrompt:", prompt.Name)
+            
+            -- Fire multiple times
+            for i = 1, 3 do
+                pcall(function()
+                    fireproximityprompt(prompt)
+                end)
+                task.wait(0.2)
+            end
+            
+            sold = true
             break
         end
     end
     
-    if sellPrompt then
-        print("💰 Using ProximityPrompt to sell...")
-        fireproximityprompt(sellPrompt)
-        task.wait(0.5)
-        
-        -- Spam E juga (backup)
-        for i = 1, 5 do
-            VIM:SendKeyEvent(true, "E", false, game)
-            task.wait(0.05)
-            VIM:SendKeyEvent(false, "E", false, game)
-            task.wait(0.1)
-        end
-    else
-        -- Method 2: Spam E key (fallback)
-        print("💰 Spamming E to sell...")
-        for i = 1, 10 do
-            VIM:SendKeyEvent(true, "E", false, game)
-            task.wait(0.05)
-            VIM:SendKeyEvent(false, "E", false, game)
-            task.wait(0.1)
-        end
+    -- SELL METHOD 2: Spam E
+    print("💰 Spamming E key...")
+    for i = 1, 15 do
+        VIM:SendKeyEvent(true, "E", false, game)
+        task.wait(0.05)
+        VIM:SendKeyEvent(false, "E", false, game)
+        task.wait(0.1)
     end
     
-    -- Method 3: Cari sell remote
-    local sellRemote = nil
+    -- SELL METHOD 3: Click spam
+    print("💰 Click spam...")
+    for i = 1, 10 do
+        VIM:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+        task.wait(0.05)
+        VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+        task.wait(0.1)
+    end
+    
+    -- SELL METHOD 4: Remote (cari semua kemungkinan)
     for _, remote in pairs(RS:GetDescendants()) do
         if remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") then
             local name = remote.Name:lower()
             if name:find("sell") or name:find("apprai") then
-                sellRemote = remote
-                break
+                print("💰 Trying remote:", remote.Name)
+                pcall(function()
+                    if remote:IsA("RemoteEvent") then
+                        remote:FireServer()
+                        remote:FireServer("all") -- some games use parameter
+                    else
+                        remote:InvokeServer()
+                    end
+                end)
+                task.wait(0.2)
             end
         end
-    end
-    
-    if sellRemote then
-        print("💰 Using sell remote...")
-        pcall(function()
-            if sellRemote:IsA("RemoteEvent") then
-                sellRemote:FireServer()
-            else
-                sellRemote:InvokeServer()
-            end
-        end)
     end
     
     task.wait(1)
     
     Stats.Sells = Stats.Sells + 1
-    print("✅ Sell attempt #" .. Stats.Sells)
+    print("✅ Sell attempt #" .. Stats.Sells .. " complete!")
     
-    -- Balik ke posisi awal
+    -- Balik ke fishing spot
     if OriginalPosition then
         print("📍 Returning to fishing spot...")
-        HRP.CFrame = OriginalPosition
+        SafeTeleport(OriginalPosition)
         task.wait(0.5)
     end
     
+    print("════════════════════════════════════════")
+    print("✅ SELL COMPLETE! Resuming fishing...")
+    print("════════════════════════════════════════")
+    
     IsSelling = false
-    print("✅ Sell complete! Resuming fishing...")
 end
 
 -- ════════════════════════════════════════════════════════
@@ -336,9 +409,9 @@ local function StartSpamReel()
         IsReeling = false
         IsFishing = false
         
-        -- Auto sell check
+        -- AUTO SELL CHECK (TIAP 5 IKAN!)
         if Config.AutoSell and Stats.Fish % Config.SellInterval == 0 then
-            print("💰 Time to sell! (Every " .. Config.SellInterval .. " fish)")
+            print("💰 5 IKAN TERCAPAI! JUAL OTOMATIS...")
             task.wait(1)
             AutoSell()
         else
@@ -356,7 +429,7 @@ local function StopSpamReel()
 end
 
 -- ════════════════════════════════════════════════════════
--- DETECTION (60 FPS)
+-- DETECTION
 -- ════════════════════════════════════════════════════════
 local ReelDetection = nil
 
@@ -367,12 +440,10 @@ local function StartReelDetection()
         if Config.Enabled and IsFishing and not IsReeling and not IsSelling then
             local hasUI = HasReelUI()
             if hasUI then
-                print("🎯 UI DETECTED!")
                 StartSpamReel()
             end
         end
     end)
-    print("✅ Detection active!")
 end
 
 local function StopReelDetection()
@@ -380,7 +451,6 @@ local function StopReelDetection()
         ReelDetection:Disconnect()
         ReelDetection = nil
     end
-    print("❌ Detection stopped!")
 end
 
 -- ════════════════════════════════════════════════════════
@@ -395,18 +465,40 @@ task.spawn(function()
 end)
 
 -- ════════════════════════════════════════════════════════
+-- DEBUG COMMAND
+-- ════════════════════════════════════════════════════════
+_G.FischDebug = function()
+    print("════════════════════════════════════════")
+    print("🔍 FISCH DEBUG INFO")
+    print("════════════════════════════════════════")
+    
+    local merchant, part = FindMerchant()
+    if merchant then
+        print("✅ Merchant:", merchant.Name)
+        print("✅ Position:", part.Position)
+        
+        -- List all prompts
+        for _, prompt in pairs(merchant:GetDescendants()) do
+            if prompt:IsA("ProximityPrompt") then
+                print("  → ProximityPrompt:", prompt.Name)
+            end
+        end
+    else
+        print("❌ No merchant found")
+    end
+    
+    print("════════════════════════════════════════")
+end
+
+-- ════════════════════════════════════════════════════════
 -- GUI
 -- ════════════════════════════════════════════════════════
-print("Creating GUI...")
-
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "FischSpamGUI"
 ScreenGui.ResetOnSpawn = false
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = PlayerGui
 
 local Main = Instance.new("Frame")
-Main.Name = "Main"
 Main.Parent = ScreenGui
 Main.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 Main.BorderSizePixel = 0
@@ -415,9 +507,7 @@ Main.Size = UDim2.new(0, 340, 0, 280)
 Main.Active = true
 Main.Draggable = true
 
-local Corner = Instance.new("UICorner")
-Corner.CornerRadius = UDim.new(0, 15)
-Corner.Parent = Main
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 15)
 
 local Glow = Instance.new("UIStroke")
 Glow.Color = Color3.fromRGB(255, 215, 0)
@@ -430,13 +520,11 @@ Title.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
 Title.BorderSizePixel = 0
 Title.Size = UDim2.new(1, 0, 0, 50)
 Title.Font = Enum.Font.GothamBold
-Title.Text = "⚡💰 SPAM + AUTO SELL!"
+Title.Text = "⚡💰 SELL TIAP 5 IKAN!"
 Title.TextColor3 = Color3.new(1, 1, 1)
 Title.TextSize = 17
 
-local TitleCorner = Instance.new("UICorner")
-TitleCorner.CornerRadius = UDim.new(0, 15)
-TitleCorner.Parent = Title
+Instance.new("UICorner", Title).CornerRadius = UDim.new(0, 15)
 
 local TitleFix = Instance.new("Frame")
 TitleFix.Parent = Title
@@ -476,9 +564,10 @@ task.spawn(function()
             end
             
             local nextSell = Config.SellInterval - (Stats.Fish % Config.SellInterval)
+            if nextSell == 0 then nextSell = Config.SellInterval end
             
             StatsLabel.Text = string.format(
-                "%s\n%s\n\n🐟 Fish: %d | 🎣 Casts: %d\n🖱️ Clicks: %d | 💰 Sells: %d\n\n📊 Next sell in: %d fish",
+                "%s\n%s\n\n🐟 Fish: %d | 🎣 Casts: %d\n🖱️ Clicks: %d | 💰 Sells: %d\n\n📊 Sell in: %d fish",
                 status,
                 currentAction,
                 Stats.Fish,
@@ -491,7 +580,6 @@ task.spawn(function()
     end
 end)
 
--- Auto Sell Toggle
 local SellToggle = Instance.new("TextButton")
 SellToggle.Parent = Main
 SellToggle.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
@@ -499,27 +587,24 @@ SellToggle.BorderSizePixel = 0
 SellToggle.Position = UDim2.new(0, 15, 0, 170)
 SellToggle.Size = UDim2.new(1, -30, 0, 35)
 SellToggle.Font = Enum.Font.GothamBold
-SellToggle.Text = "💰 AUTO SELL: ON (Every 20 fish)"
+SellToggle.Text = "💰 AUTO SELL: ON (5 FISH)"
 SellToggle.TextColor3 = Color3.new(1, 1, 1)
 SellToggle.TextSize = 13
 
-local SellCorner = Instance.new("UICorner")
-SellCorner.CornerRadius = UDim.new(0, 8)
-SellCorner.Parent = SellToggle
+Instance.new("UICorner", SellToggle).CornerRadius = UDim.new(0, 8)
 
 SellToggle.MouseButton1Click:Connect(function()
     Config.AutoSell = not Config.AutoSell
     
     if Config.AutoSell then
         SellToggle.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
-        SellToggle.Text = "💰 AUTO SELL: ON (Every " .. Config.SellInterval .. " fish)"
+        SellToggle.Text = "💰 AUTO SELL: ON (5 FISH)"
     else
         SellToggle.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
         SellToggle.Text = "💰 AUTO SELL: OFF"
     end
 end)
 
--- Manual Sell Button
 local ManualSell = Instance.new("TextButton")
 ManualSell.Parent = Main
 ManualSell.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
@@ -531,20 +616,15 @@ ManualSell.Text = "🔧 MANUAL SELL NOW"
 ManualSell.TextColor3 = Color3.new(1, 1, 1)
 ManualSell.TextSize = 12
 
-local ManualCorner = Instance.new("UICorner")
-ManualCorner.CornerRadius = UDim.new(0, 6)
-ManualCorner.Parent = ManualSell
+Instance.new("UICorner", ManualSell).CornerRadius = UDim.new(0, 6)
 
 ManualSell.MouseButton1Click:Connect(function()
     if not IsSelling then
         print("🔧 Manual sell triggered!")
         task.spawn(AutoSell)
-    else
-        warn("Already selling!")
     end
 end)
 
--- Main Toggle
 local ToggleButton = Instance.new("TextButton")
 ToggleButton.Parent = Main
 ToggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
@@ -556,9 +636,7 @@ ToggleButton.Text = "🔴 START"
 ToggleButton.TextColor3 = Color3.new(1, 1, 1)
 ToggleButton.TextSize = 15
 
-local ButtonCorner = Instance.new("UICorner")
-ButtonCorner.CornerRadius = UDim.new(0, 8)
-ButtonCorner.Parent = ToggleButton
+Instance.new("UICorner", ToggleButton).CornerRadius = UDim.new(0, 8)
 
 ToggleButton.MouseButton1Click:Connect(function()
     Config.Enabled = not Config.Enabled
@@ -569,10 +647,10 @@ ToggleButton.MouseButton1Click:Connect(function()
         Glow.Color = Color3.fromRGB(0, 255, 0)
         StartReelDetection()
         
-        -- Save starting position
+        Character, HRP = UpdateCharacter()
         OriginalPosition = HRP.CFrame
         
-        print("✅ AUTO FISHING + SELLING STARTED!")
+        print("✅ STARTED! Jual tiap 5 ikan!")
     else
         ToggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
         ToggleButton.Text = "🔴 START"
@@ -589,29 +667,31 @@ UIS.InputBegan:Connect(function(input, processed)
     if processed then return end
     if input.KeyCode == Enum.KeyCode.Delete then
         Main.Visible = not Main.Visible
-        print("GUI Toggled:", Main.Visible)
     elseif input.KeyCode == Enum.KeyCode.F6 then
         ToggleButton.MouseButton1Click:Fire()
     elseif input.KeyCode == Enum.KeyCode.F7 then
         if not IsSelling then
             task.spawn(AutoSell)
         end
+    elseif input.KeyCode == Enum.KeyCode.F8 then
+        _G.FischDebug()
     end
 end)
 
 print("════════════════════════════════════════")
-print("✅ AUTO SELL ADDED!")
+print("✅ FISCH AUTO LOADED!")
 print("════════════════════════════════════════")
-print("💰 Features:")
-print("  ✅ Auto sell every 20 fish")
-print("  ✅ Teleport to merchant")
-print("  ✅ Return to fishing spot")
-print("  ✅ Manual sell button")
+print("💰 AUTO SELL: TIAP 5 IKAN!")
 print("════════════════════════════════════════")
 print("🎮 Controls:")
 print("  DELETE = Hide/Show")
 print("  F6 = Toggle ON/OFF")
 print("  F7 = Manual Sell")
+print("  F8 = Debug (cek merchant)")
 print("════════════════════════════════════════")
-print("⚡💰 READY TO FISH & SELL!")
+print("💡 Kalau sell ga work:")
+print("  1. Pergi ke merchant")
+print("  2. Tekan F7 (manual sell)")
+print("  3. Tekan F8 (debug)")
+print("  4. Kasih tau nama NPC di console!")
 print("════════════════════════════════════════")
