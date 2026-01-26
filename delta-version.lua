@@ -1,155 +1,136 @@
 --[[
     ═══════════════════════════════════════════════════════
-    🎣 FISCH AUTO - CLEAN VERSION
-    By: SanzzAza (Original) | Clean & Fixed
-    
-    FIXES:
-    ✅ Tidak spam keyboard (tidak loncat-loncat)
-    ✅ Hanya fokus auto fishing
-    ✅ Tidak ganggu movement
-    ✅ Clean detection
+    🎣 FISCH AUTO - SIMPLE VERSION
+    Klik ON = Langsung Auto Fish!
     ═══════════════════════════════════════════════════════
 ]]
 
--- ════════════════════════════════════════════════════════
--- CLEANUP OLD INSTANCE
--- ════════════════════════════════════════════════════════
-if _G.FischRunning then
-    _G.FischRunning = false
-    task.wait(0.5)
-end
-
-pcall(function()
-    game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("FischGUI"):Destroy()
-end)
-
-print("════════════════════════════════════════")
-print("🎣 FISCH AUTO - CLEAN VERSION")
-print("════════════════════════════════════════")
+-- Cleanup old
+if _G.StopFisch then _G.StopFisch() end
+pcall(function() game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("FischAuto"):Destroy() end)
 
 repeat task.wait() until game:IsLoaded()
 task.wait(2)
 
 -- ════════════════════════════════════════════════════════
--- SERVICES
+-- SETUP
 -- ════════════════════════════════════════════════════════
 local Players = game:GetService("Players")
-local RS = game:GetService("ReplicatedStorage")
 local UIS = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
-
 local Player = Players.LocalPlayer
 local PlayerGui = Player:WaitForChild("PlayerGui")
+local Mouse = Player:GetMouse()
+
+local Running = true
+local AutoFishEnabled = false
+local Stats = { Fish = 0, Casts = 0 }
 
 -- ════════════════════════════════════════════════════════
--- STATE
+-- MOUSE FUNCTIONS
 -- ════════════════════════════════════════════════════════
-_G.FischRunning = true
-
-local Connections = {}
-local Config = {
-    AutoCast = true,
-    AutoReel = true,
-    AutoShake = true,
-    ShowDebug = false,
-    
-    CastDelay = 3,
-    ReelDelay = 0.3,
-}
-
-local Stats = {
-    Fish = 0,
-    Casts = 0,
-    Start = tick(),
-}
-
--- ════════════════════════════════════════════════════════
--- UTILITIES
--- ════════════════════════════════════════════════════════
-local function Connect(signal, func)
-    local conn = signal:Connect(func)
-    table.insert(Connections, conn)
-    return conn
-end
-
-local function Debug(...)
-    if Config.ShowDebug then
-        print("🐛", ...)
-    end
-end
-
-local function Cleanup()
-    _G.FischRunning = false
-    for _, conn in pairs(Connections) do
-        pcall(function() conn:Disconnect() end)
-    end
-    Connections = {}
-end
-
--- Fire signal compatibility
-local function FireSignal(signal)
+local function MouseDown()
+    pcall(function() mouse1press() end)
     pcall(function()
-        if firesignal then
-            firesignal(signal)
-        elseif syn and syn.fire_signal then
-            syn.fire_signal(signal)
-        elseif getconnections then
-            for _, v in pairs(getconnections(signal)) do
-                if v.Fire then v:Fire() end
+        game:GetService("VirtualInputManager"):SendMouseButtonEvent(Mouse.X, Mouse.Y, 0, true, game, 1)
+    end)
+end
+
+local function MouseUp()
+    pcall(function() mouse1release() end)
+    pcall(function()
+        game:GetService("VirtualInputManager"):SendMouseButtonEvent(Mouse.X, Mouse.Y, 0, false, game, 1)
+    end)
+end
+
+local function ClickMouse()
+    MouseDown()
+    task.wait(0.05)
+    MouseUp()
+end
+
+-- ════════════════════════════════════════════════════════
+-- ROD FUNCTIONS
+-- ════════════════════════════════════════════════════════
+local function GetRod()
+    local char = Player.Character
+    if char then
+        for _, v in pairs(char:GetChildren()) do
+            if v:IsA("Tool") then return v, true end
+        end
+    end
+    for _, v in pairs(Player.Backpack:GetChildren()) do
+        if v:IsA("Tool") then return v, false end
+    end
+    return nil, false
+end
+
+local function EquipRod()
+    local rod, equipped = GetRod()
+    if rod and not equipped then
+        local char = Player.Character
+        if char and char:FindFirstChildOfClass("Humanoid") then
+            char:FindFirstChildOfClass("Humanoid"):EquipTool(rod)
+            task.wait(0.5)
+        end
+    end
+end
+
+-- ════════════════════════════════════════════════════════
+-- DETECTION FUNCTIONS
+-- ════════════════════════════════════════════════════════
+local function FindReelUI()
+    for _, gui in pairs(PlayerGui:GetChildren()) do
+        if gui:IsA("ScreenGui") and gui.Name ~= "FischAuto" and gui.Enabled then
+            for _, v in pairs(gui:GetDescendants()) do
+                if v:IsA("Frame") and v.Visible then
+                    local n = v.Name:lower()
+                    if n:find("reel") or n:find("fish") or n:find("bar") or n:find("meter") or n:find("progress") or n:find("minigame") then
+                        return v
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end
+
+local function FindShakeButton()
+    for _, gui in pairs(PlayerGui:GetChildren()) do
+        if gui:IsA("ScreenGui") and gui.Name ~= "FischAuto" and gui.Enabled then
+            for _, v in pairs(gui:GetDescendants()) do
+                if (v:IsA("TextButton") or v:IsA("ImageButton") or v:IsA("Frame")) and v.Visible then
+                    local n = v.Name:lower()
+                    if n:find("shake") or n:find("!") or n:find("struggle") or n:find("tap") then
+                        return v
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end
+
+local function ClickButton(btn)
+    if not btn then return end
+    pcall(function()
+        if firesignal then firesignal(btn.MouseButton1Click) end
+    end)
+    pcall(function()
+        if getconnections then
+            for _, c in pairs(getconnections(btn.MouseButton1Click)) do
+                if c.Fire then c:Fire() end
             end
         end
     end)
 end
 
 -- ════════════════════════════════════════════════════════
--- ROD FUNCTIONS
--- ════════════════════════════════════════════════════════
-local function GetCharacter()
-    return Player.Character or Player.CharacterAdded:Wait()
-end
-
-local function FindRod()
-    -- Check equipped
-    local char = GetCharacter()
-    if char then
-        for _, tool in pairs(char:GetChildren()) do
-            if tool:IsA("Tool") and tool.Name:lower():find("rod") then
-                return tool, true -- rod, isEquipped
-            end
-        end
-    end
-    
-    -- Check backpack
-    for _, tool in pairs(Player.Backpack:GetChildren()) do
-        if tool:IsA("Tool") and tool.Name:lower():find("rod") then
-            return tool, false
-        end
-    end
-    
-    return nil, false
-end
-
-local function EquipRod()
-    local rod, equipped = FindRod()
-    if rod and not equipped then
-        local hum = GetCharacter():FindFirstChildOfClass("Humanoid")
-        if hum then
-            hum:EquipTool(rod)
-            task.wait(0.3)
-            return true
-        end
-    end
-    return equipped
-end
-
--- ════════════════════════════════════════════════════════
 -- ANTI-AFK
 -- ════════════════════════════════════════════════════════
-Connect(Player.Idled, function()
+Player.Idled:Connect(function()
     pcall(function()
-        local VU = game:GetService("VirtualUser")
-        VU:CaptureController()
-        VU:ClickButton2(Vector2.new())
+        game:GetService("VirtualUser"):CaptureController()
+        game:GetService("VirtualUser"):ClickButton2(Vector2.new())
     end)
 end)
 
@@ -157,337 +138,224 @@ end)
 -- GUI
 -- ════════════════════════════════════════════════════════
 local Gui = Instance.new("ScreenGui")
-Gui.Name = "FischGUI"
+Gui.Name = "FischAuto"
 Gui.Parent = PlayerGui
 Gui.ResetOnSpawn = false
-Gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 local Main = Instance.new("Frame")
-Main.Name = "Main"
 Main.Parent = Gui
-Main.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-Main.Position = UDim2.new(0.02, 0, 0.3, 0)
-Main.Size = UDim2.new(0, 280, 0, 290)
+Main.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+Main.Position = UDim2.new(0.02, 0, 0.4, 0)
+Main.Size = UDim2.new(0, 220, 0, 150)
 Main.Active = true
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 12)
+Instance.new("UIStroke", Main).Color = Color3.fromRGB(0, 170, 255)
 
-Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 10)
-
-local Stroke = Instance.new("UIStroke", Main)
-Stroke.Color = Color3.fromRGB(0, 150, 255)
-Stroke.Thickness = 2
-
--- Dragging
-local dragging, dragStart, startPos
-
-Connect(Main.InputBegan, function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = true
-        dragStart = input.Position
+-- Drag
+local drag, dragStart, startPos
+Main.InputBegan:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then
+        drag = true
+        dragStart = i.Position
         startPos = Main.Position
     end
 end)
-
-Connect(Main.InputEnded, function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = false
-    end
+Main.InputEnded:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then drag = false end
 end)
-
-Connect(UIS.InputChanged, function(input)
-    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-        local delta = input.Position - dragStart
-        Main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+UIS.InputChanged:Connect(function(i)
+    if drag and i.UserInputType == Enum.UserInputType.MouseMovement then
+        local d = i.Position - dragStart
+        Main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
     end
 end)
 
 -- Title
-local Title = Instance.new("Frame")
+local Title = Instance.new("TextLabel")
 Title.Parent = Main
-Title.BackgroundColor3 = Color3.fromRGB(0, 130, 210)
-Title.Size = UDim2.new(1, 0, 0, 40)
-Instance.new("UICorner", Title).CornerRadius = UDim.new(0, 10)
+Title.BackgroundColor3 = Color3.fromRGB(0, 140, 220)
+Title.Size = UDim2.new(1, 0, 0, 35)
+Title.Font = Enum.Font.GothamBold
+Title.Text = "🎣 FISCH AUTO"
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.TextSize = 16
+Instance.new("UICorner", Title).CornerRadius = UDim.new(0, 12)
 
-local TitleFix = Instance.new("Frame")
-TitleFix.Parent = Title
-TitleFix.BackgroundColor3 = Color3.fromRGB(0, 130, 210)
-TitleFix.BorderSizePixel = 0
-TitleFix.Position = UDim2.new(0, 0, 0.5, 0)
-TitleFix.Size = UDim2.new(1, 0, 0.5, 0)
+-- Status
+local Status = Instance.new("TextLabel")
+Status.Parent = Main
+Status.BackgroundTransparency = 1
+Status.Position = UDim2.new(0, 10, 0, 40)
+Status.Size = UDim2.new(1, -20, 0, 25)
+Status.Font = Enum.Font.GothamBold
+Status.TextColor3 = Color3.fromRGB(255, 255, 100)
+Status.TextSize = 14
+Status.Text = "Status: OFF"
+Status.TextXAlignment = Enum.TextXAlignment.Left
 
-local TitleText = Instance.new("TextLabel")
-TitleText.Parent = Title
-TitleText.BackgroundTransparency = 1
-TitleText.Size = UDim2.new(1, 0, 1, 0)
-TitleText.Font = Enum.Font.GothamBold
-TitleText.Text = "🎣 FISCH AUTO - CLEAN"
-TitleText.TextColor3 = Color3.new(1, 1, 1)
-TitleText.TextSize = 16
+-- Stats
+local StatsLabel = Instance.new("TextLabel")
+StatsLabel.Parent = Main
+StatsLabel.BackgroundTransparency = 1
+StatsLabel.Position = UDim2.new(0, 10, 0, 60)
+StatsLabel.Size = UDim2.new(1, -20, 0, 20)
+StatsLabel.Font = Enum.Font.Gotham
+StatsLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+StatsLabel.TextSize = 12
+StatsLabel.Text = "🐟 0 Fish | 🎯 0 Casts"
+StatsLabel.TextXAlignment = Enum.TextXAlignment.Left
 
--- Info
-local Info = Instance.new("TextLabel")
-Info.Name = "Info"
-Info.Parent = Main
-Info.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
-Info.Position = UDim2.new(0.05, 0, 0, 50)
-Info.Size = UDim2.new(0.9, 0, 0, 50)
-Info.Font = Enum.Font.RobotoMono
-Info.TextColor3 = Color3.fromRGB(200, 200, 200)
-Info.TextSize = 11
-Info.Text = "Loading..."
-Instance.new("UICorner", Info).CornerRadius = UDim.new(0, 8)
+-- AUTO FISH BUTTON (MAIN TOGGLE)
+local AutoBtn = Instance.new("TextButton")
+AutoBtn.Parent = Main
+AutoBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+AutoBtn.Position = UDim2.new(0.1, 0, 0, 90)
+AutoBtn.Size = UDim2.new(0.8, 0, 0, 45)
+AutoBtn.Font = Enum.Font.GothamBold
+AutoBtn.Text = "AUTO FISH: OFF"
+AutoBtn.TextColor3 = Color3.new(1, 1, 1)
+AutoBtn.TextSize = 16
+Instance.new("UICorner", AutoBtn).CornerRadius = UDim.new(0, 10)
 
--- Update info
-task.spawn(function()
-    while _G.FischRunning do
-        task.wait(0.5)
-        if Info and Info.Parent then
-            local elapsed = tick() - Stats.Start
-            local mins = math.floor(elapsed / 60)
-            local secs = math.floor(elapsed % 60)
-            Info.Text = string.format("⏱️ %02d:%02d | 🐟 Fish: %d | 🎯 Casts: %d", mins, secs, Stats.Fish, Stats.Casts)
-        end
+-- Toggle function
+local function UpdateButton()
+    if AutoFishEnabled then
+        AutoBtn.Text = "AUTO FISH: ON"
+        AutoBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 80)
+        Status.Text = "Status: RUNNING..."
+        Status.TextColor3 = Color3.fromRGB(0, 255, 100)
+    else
+        AutoBtn.Text = "AUTO FISH: OFF"
+        AutoBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+        Status.Text = "Status: OFF"
+        Status.TextColor3 = Color3.fromRGB(255, 100, 100)
     end
-end)
-
--- Toggle Creator
-local yPos = 110
-
-local function CreateToggle(name, key, icon)
-    local frame = Instance.new("Frame")
-    frame.Parent = Main
-    frame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
-    frame.Position = UDim2.new(0.05, 0, 0, yPos)
-    frame.Size = UDim2.new(0.9, 0, 0, 35)
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
-    
-    local label = Instance.new("TextLabel")
-    label.Parent = frame
-    label.BackgroundTransparency = 1
-    label.Position = UDim2.new(0, 10, 0, 0)
-    label.Size = UDim2.new(0.6, 0, 1, 0)
-    label.Font = Enum.Font.Gotham
-    label.Text = icon .. " " .. name
-    label.TextColor3 = Color3.new(1, 1, 1)
-    label.TextSize = 13
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    
-    local btn = Instance.new("TextButton")
-    btn.Parent = frame
-    btn.Position = UDim2.new(1, -60, 0.5, -12)
-    btn.Size = UDim2.new(0, 50, 0, 24)
-    btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 11
-    btn.TextColor3 = Color3.new(1, 1, 1)
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
-    
-    local function update()
-        btn.Text = Config[key] and "ON" or "OFF"
-        btn.BackgroundColor3 = Config[key] and Color3.fromRGB(0, 170, 70) or Color3.fromRGB(170, 50, 50)
-    end
-    update()
-    
-    Connect(btn.MouseButton1Click, function()
-        Config[key] = not Config[key]
-        update()
-    end)
-    
-    yPos = yPos + 40
 end
 
-CreateToggle("Auto Cast", "AutoCast", "🎣")
-CreateToggle("Auto Reel", "AutoReel", "🔄")
-CreateToggle("Auto Shake", "AutoShake", "💥")
-CreateToggle("Debug", "ShowDebug", "🐛")
-
--- Close Button
-local CloseBtn = Instance.new("TextButton")
-CloseBtn.Parent = Main
-CloseBtn.BackgroundColor3 = Color3.fromRGB(170, 50, 50)
-CloseBtn.Position = UDim2.new(0.05, 0, 0, yPos)
-CloseBtn.Size = UDim2.new(0.9, 0, 0, 30)
-CloseBtn.Font = Enum.Font.GothamBold
-CloseBtn.Text = "✖ CLOSE"
-CloseBtn.TextColor3 = Color3.new(1, 1, 1)
-CloseBtn.TextSize = 13
-Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 8)
-
-Connect(CloseBtn.MouseButton1Click, function()
-    Cleanup()
-    Gui:Destroy()
+AutoBtn.MouseButton1Click:Connect(function()
+    AutoFishEnabled = not AutoFishEnabled
+    UpdateButton()
+    print(AutoFishEnabled and "🎣 Auto Fish STARTED!" or "🛑 Auto Fish STOPPED!")
 end)
 
--- Toggle visibility
-Connect(UIS.InputBegan, function(input, processed)
-    if processed then return end
-    if input.KeyCode == Enum.KeyCode.Delete then
+-- Hide GUI
+UIS.InputBegan:Connect(function(i, gp)
+    if gp then return end
+    if i.KeyCode == Enum.KeyCode.Delete then
         Main.Visible = not Main.Visible
     end
 end)
 
 -- ════════════════════════════════════════════════════════
--- FISHING STATE
--- ════════════════════════════════════════════════════════
-local IsFishing = false
-local LastCast = 0
-
--- ════════════════════════════════════════════════════════
--- AUTO CAST (CLEAN - NO KEY SPAM)
+-- MAIN AUTO FISH LOOP
 -- ════════════════════════════════════════════════════════
 task.spawn(function()
-    Debug("Cast system started")
-    
-    while _G.FischRunning do
-        task.wait(0.5)
+    while Running do
+        task.wait(0.1)
         
-        if not Config.AutoCast then continue end
-        if IsFishing then continue end
-        if tick() - LastCast < Config.CastDelay then continue end
+        -- Update stats
+        StatsLabel.Text = string.format("🐟 %d Fish | 🎯 %d Casts", Stats.Fish, Stats.Casts)
         
-        -- Equip rod
-        if not EquipRod() then
-            task.wait(1)
+        -- Only run if enabled
+        if not AutoFishEnabled then 
+            task.wait(0.2)
+            continue 
+        end
+        
+        -- ═══════════════════════════════════════
+        -- PRIORITY 1: SHAKE BUTTON
+        -- ═══════════════════════════════════════
+        local shake = FindShakeButton()
+        if shake then
+            Status.Text = "Status: SHAKING!"
+            for i = 1, 5 do
+                ClickButton(shake)
+                ClickMouse()
+                task.wait(0.05)
+            end
             continue
         end
         
-        local rod, equipped = FindRod()
-        if not rod or not equipped then continue end
-        
-        Stats.Casts = Stats.Casts + 1
-        Debug("Casting #" .. Stats.Casts)
-        
-        -- ONLY use tool activation (no key spam!)
-        pcall(function()
-            rod:Activate()
-        end)
-        
-        IsFishing = true
-        LastCast = tick()
-    end
-end)
-
--- ════════════════════════════════════════════════════════
--- AUTO REEL (CLEAN - DETECT UI AND CLICK BUTTONS ONLY)
--- ════════════════════════════════════════════════════════
-task.spawn(function()
-    Debug("Reel system started")
-    
-    while _G.FischRunning do
-        task.wait(0.1)
-        
-        if not Config.AutoReel then continue end
-        
-        -- Cari fishing UI (bar, minigame, dll)
-        for _, ui in pairs(PlayerGui:GetDescendants()) do
-            if ui:IsDescendantOf(Gui) then continue end
+        -- ═══════════════════════════════════════
+        -- PRIORITY 2: REEL MINIGAME
+        -- ═══════════════════════════════════════
+        local reelUI = FindReelUI()
+        if reelUI then
+            Status.Text = "Status: REELING!"
             
-            local name = ui.Name:lower()
-            local isVisible = false
+            -- Hold mouse untuk reel
+            MouseDown()
+            task.wait(0.3)
+            MouseUp()
+            task.wait(0.1)
             
-            pcall(function()
-                if ui:IsA("GuiObject") then
-                    isVisible = ui.Visible
-                end
-            end)
-            
-            -- Detect fishing minigame UI
-            if isVisible and ui:IsA("Frame") then
-                if name:find("reel") or name:find("fish") or name:find("catch") or 
-                   name:find("minigame") or name:find("bar") or name:find("meter") then
-                    
-                    Debug("Fishing UI detected:", ui.Name)
-                    task.wait(Config.ReelDelay)
-                    
-                    -- HANYA klik tombol di dalam UI (tidak spam keyboard!)
-                    for _, child in pairs(ui:GetDescendants()) do
-                        if child:IsA("TextButton") or child:IsA("ImageButton") then
-                            Debug("Clicking button:", child.Name)
-                            FireSignal(child.MouseButton1Click)
-                            FireSignal(child.Activated)
-                        end
-                    end
-                    
-                    Stats.Fish = Stats.Fish + 1
-                    IsFishing = false
-                    Debug("Fish caught! Total:", Stats.Fish)
-                    
-                    break
+            -- Click any buttons
+            for _, v in pairs(reelUI:GetDescendants()) do
+                if v:IsA("TextButton") or v:IsA("ImageButton") then
+                    ClickButton(v)
                 end
             end
+            
+            continue
         end
-    end
-end)
-
--- ════════════════════════════════════════════════════════
--- AUTO SHAKE (CLEAN - ONLY CLICK SHAKE BUTTONS)
--- ════════════════════════════════════════════════════════
-task.spawn(function()
-    Debug("Shake system started")
-    
-    while _G.FischRunning do
-        task.wait(0.08)
         
-        if not Config.AutoShake then continue end
+        -- ═══════════════════════════════════════
+        -- PRIORITY 3: CAST ROD
+        -- ═══════════════════════════════════════
+        Status.Text = "Status: CASTING..."
         
-        for _, ui in pairs(PlayerGui:GetDescendants()) do
-            if ui:IsDescendantOf(Gui) then continue end
+        -- Equip rod
+        EquipRod()
+        task.wait(0.3)
+        
+        local rod, equipped = GetRod()
+        if rod and equipped then
+            Stats.Casts = Stats.Casts + 1
             
-            local name = ui.Name:lower()
-            local isVisible = false
+            -- Activate rod
+            pcall(function() rod:Activate() end)
+            task.wait(0.1)
             
-            pcall(function()
-                if ui:IsA("GuiObject") then
-                    isVisible = ui.Visible
-                end
-            end)
+            -- Hold mouse untuk power, lalu release untuk cast
+            MouseDown()
+            task.wait(1) -- Hold 1 detik untuk power
+            MouseUp()
             
-            -- Detect shake button
-            if isVisible then
-                if name:find("shake") or name:find("struggle") or name:find("!") then
-                    
-                    -- HANYA klik tombol shake (tidak spam keyboard!)
-                    if ui:IsA("TextButton") or ui:IsA("ImageButton") then
-                        FireSignal(ui.MouseButton1Click)
-                        FireSignal(ui.Activated)
-                        Debug("Shake clicked!")
-                    end
-                    
-                    -- Atau cari button di dalamnya
-                    if ui:IsA("Frame") then
-                        for _, btn in pairs(ui:GetDescendants()) do
-                            if btn:IsA("TextButton") or btn:IsA("ImageButton") then
-                                FireSignal(btn.MouseButton1Click)
-                                FireSignal(btn.Activated)
-                            end
-                        end
-                    end
-                end
-            end
+            Status.Text = "Status: WAITING..."
+            task.wait(3) -- Tunggu ikan gigit
+        else
+            Status.Text = "Status: NO ROD!"
+            task.wait(1)
         end
     end
 end)
 
--- ════════════════════════════════════════════════════════
--- TIMEOUT SAFETY
--- ════════════════════════════════════════════════════════
+-- Fish counter (detect when reel UI disappears)
+local wasReeling = false
 task.spawn(function()
-    while _G.FischRunning do
-        task.wait(20)
-        if IsFishing and tick() - LastCast > 25 then
-            IsFishing = false
-            Debug("Timeout reset")
+    while Running do
+        task.wait(0.5)
+        local reelUI = FindReelUI()
+        if wasReeling and not reelUI then
+            Stats.Fish = Stats.Fish + 1
+            print("🐟 Fish caught! Total:", Stats.Fish)
         end
+        wasReeling = reelUI ~= nil
     end
 end)
 
+-- Cleanup
+_G.StopFisch = function()
+    Running = false
+    AutoFishEnabled = false
+    MouseUp()
+    print("🛑 Fisch Auto Stopped!")
+end
+
 -- ════════════════════════════════════════════════════════
--- DONE
--- ════════════════════════════════════════════════════════
-print("════════════════════════════════════════")
-print("✅ FISCH AUTO - CLEAN VERSION LOADED!")
-print("════════════════════════════════════════")
-print("🎣 Tidak spam keyboard!")
-print("🎣 Tidak bikin loncat-loncat!")
-print("🎣 Hanya fokus fishing!")
-print("════════════════════════════════════════")
-print("Press DELETE to toggle GUI")
-print("════════════════════════════════════════")
+print("═══════════════════════════════════════")
+print("✅ FISCH AUTO LOADED!")
+print("═══════════════════════════════════════")
+print("👆 Klik tombol 'AUTO FISH: OFF' untuk mulai!")
+print("🔑 Tekan DELETE untuk hide/show GUI")
+print("═══════════════════════════════════════")
