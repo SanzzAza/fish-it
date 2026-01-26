@@ -1,11 +1,10 @@
 --[[
     ════════════════════════════════════════════════════════
-    🎣 FISCH AUTO - FULLY FIXED VERSION
-    PROPER REEL MINIGAME + NO JUMP!
+    🎣 FISCH AUTO - ULTRA FAST REEL! 
     ════════════════════════════════════════════════════════
 ]]
 
-print("🎣 LOADING FULLY FIXED FISCH AUTO...")
+print("🎣 LOADING ULTRA FAST FISCH AUTO...")
 
 repeat task.wait() until game:IsLoaded()
 task.wait(2)
@@ -28,8 +27,6 @@ local Backpack = Player:WaitForChild("Backpack")
 -- ════════════════════════════════════════════════════════
 local Config = {
     Enabled = false,
-    AutoShake = true,
-    ShakeSpeed = 0.05,
 }
 
 local Stats = {
@@ -43,7 +40,7 @@ local Stats = {
 local IsFishing = false
 local IsReeling = false
 local LastCast = 0
-local HoldingClick = false
+local ReelStartTime = 0
 
 -- ════════════════════════════════════════════════════════
 -- ANTI-AFK
@@ -61,384 +58,324 @@ end)
 local function GetRod()
     if Player.Character then
         for _, tool in pairs(Player.Character:GetChildren()) do
-            if tool:IsA("Tool") and (tool.Name:lower():find("rod") or tool:FindFirstChild("events")) then
+            if tool:IsA("Tool") and tool.Name:lower():find("rod") then
                 return tool
             end
         end
     end
+    
     for _, tool in pairs(Backpack:GetChildren()) do
-        if tool:IsA("Tool") and (tool.Name:lower():find("rod") or tool:FindFirstChild("events")) then
+        if tool:IsA("Tool") and tool.Name:lower():find("rod") then
             return tool
         end
     end
-    return nil
 end
 
 local function EquipRod()
     local rod = GetRod()
     if rod and rod.Parent == Backpack then
         Player.Character.Humanoid:EquipTool(rod)
-        task.wait(0.5)
+        task.wait(0.3)
+        return true
     end
-    return GetRod()
+    return rod ~= nil
 end
 
 -- ════════════════════════════════════════════════════════
--- UI DETECTION (IMPROVED!)
+-- ULTRA FAST UI DETECTION! (OPTIMIZED!)
 -- ════════════════════════════════════════════════════════
-local function FindFishingUI()
+local CachedReelUI = nil
+local LastUICheck = 0
+
+local function HasReelUI()
+    -- Cache untuk performa!
+    local now = tick()
+    if CachedReelUI and CachedReelUI.Parent and (now - LastUICheck) < 0.1 then
+        return true, CachedReelUI
+    end
+    
+    LastUICheck = now
+    
     for _, gui in pairs(PlayerGui:GetChildren()) do
-        if gui:IsA("ScreenGui") and gui.Enabled then
-            -- Method 1: Look for reel frame
+        if gui:IsA("ScreenGui") and gui.Enabled and gui.Name ~= "FixedFischGUI" then
+            -- Quick check di top level dulu
             local reel = gui:FindFirstChild("reel", true)
-            if reel and reel:IsA("Frame") and reel.Visible then
-                return {
-                    GUI = gui,
-                    ReelFrame = reel,
-                    PlayerBar = reel:FindFirstChild("playerbar", true) or reel:FindFirstChild("bar", true),
-                    SafeZone = reel:FindFirstChild("safezone", true) or reel:FindFirstChild("fish", true),
-                }
+            if reel and reel:IsA("GuiObject") and reel.Visible then
+                CachedReelUI = reel
+                return true, reel
             end
             
-            -- Method 2: Look for any fishing-related UI
-            for _, desc in pairs(gui:GetDescendants()) do
-                if desc:IsA("Frame") and desc.Visible then
-                    local name = desc.Name:lower()
-                    if name == "reel" or name == "minigame" or name == "fishing" then
-                        return {
-                            GUI = gui,
-                            ReelFrame = desc,
-                            PlayerBar = desc:FindFirstChild("playerbar", true) or desc:FindFirstChild("bar", true),
-                            SafeZone = desc:FindFirstChild("safezone", true) or desc:FindFirstChild("target", true),
-                        }
+            -- Deep scan
+            for _, obj in pairs(gui:GetDescendants()) do
+                if obj:IsA("GuiObject") and obj.Visible then
+                    local name = obj.Name:lower()
+                    
+                    -- Deteksi lebih spesifik
+                    if name == "reel" or name == "safezone" or name == "bar" or 
+                       name == "reelbar" or name == "fishingbar" or name == "progress" or
+                       name == "playerbar" or name == "fish" or
+                       name:find("reel") or name:find("safe") then
+                        CachedReelUI = obj
+                        return true, obj
                     end
                 end
             end
         end
     end
-    return nil
-end
-
-local function FindShakeUI()
-    for _, gui in pairs(PlayerGui:GetChildren()) do
-        if gui:IsA("ScreenGui") and gui.Enabled then
-            for _, desc in pairs(gui:GetDescendants()) do
-                if desc:IsA("ImageLabel") or desc:IsA("TextLabel") then
-                    local name = desc.Name:lower()
-                    -- Deteksi "!" atau shake indicator
-                    if (name:find("shake") or name:find("alert") or name:find("indicator") or name:find("!")) 
-                       and desc.Visible then
-                        return desc
-                    end
-                end
-            end
-        end
-    end
-    return nil
-end
-
--- ════════════════════════════════════════════════════════
--- CLICK CONTROL (PROPER HOLD/RELEASE!)
--- ════════════════════════════════════════════════════════
-local function StartHold()
-    if not HoldingClick then
-        HoldingClick = true
-        VIM:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-    end
-end
-
-local function StopHold()
-    if HoldingClick then
-        HoldingClick = false
-        VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-    end
-end
-
-local function QuickClick()
-    VIM:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-    task.wait(0.05)
-    VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-end
-
--- ════════════════════════════════════════════════════════
--- REEL MINIGAME (FIXED!)
--- ════════════════════════════════════════════════════════
-local function DoReelMinigame(uiData)
-    if not uiData or not uiData.ReelFrame then return end
     
-    IsReeling = true
-    print("🎯 Starting reel minigame...")
-    
-    local startTime = tick()
-    local maxTime = 30 -- Max 30 detik per fish
-    
-    while Config.Enabled and IsReeling and (tick() - startTime) < maxTime do
-        -- Re-check UI masih ada
-        local currentUI = FindFishingUI()
-        if not currentUI then
-            print("✅ Minigame selesai!")
-            break
-        end
-        
-        local playerBar = currentUI.PlayerBar
-        local safeZone = currentUI.SafeZone
-        
-        if playerBar and safeZone then
-            -- Get positions
-            local playerPos = playerBar.AbsolutePosition.Y + (playerBar.AbsoluteSize.Y / 2)
-            local safeTop = safeZone.AbsolutePosition.Y
-            local safeBottom = safeZone.AbsolutePosition.Y + safeZone.AbsoluteSize.Y
-            local safeCenter = (safeTop + safeBottom) / 2
-            
-            -- Logic: HOLD untuk naik, RELEASE untuk turun
-            if playerPos > safeCenter + 5 then
-                -- Player bar terlalu bawah, perlu naik = HOLD
-                StartHold()
-            elseif playerPos < safeCenter - 5 then
-                -- Player bar terlalu atas, perlu turun = RELEASE
-                StopHold()
-            else
-                -- Di tengah safe zone, maintain
-                -- Toggle untuk stay in place
-                if math.random() > 0.5 then
-                    StartHold()
-                else
-                    StopHold()
-                end
-            end
-        else
-            -- Fallback: just hold/release randomly
-            if math.random() > 0.5 then
-                StartHold()
-            else
-                StopHold()
-            end
-        end
-        
-        task.wait(0.03) -- Smooth control
-    end
-    
-    StopHold()
-    Stats.Fish = Stats.Fish + 1
-    IsReeling = false
-    IsFishing = false
-    print("🐟 Fish caught! Total: " .. Stats.Fish)
-    task.wait(1)
+    CachedReelUI = nil
+    return false, nil
 end
 
 -- ════════════════════════════════════════════════════════
--- SHAKE HANDLER
--- ════════════════════════════════════════════════════════
-local function DoShake()
-    print("⚡ Shake detected! Clicking...")
-    for i = 1, 10 do
-        QuickClick()
-        task.wait(Config.ShakeSpeed)
-        
-        -- Check if shake UI gone
-        if not FindShakeUI() then
-            break
-        end
-    end
-end
-
--- ════════════════════════════════════════════════════════
--- CAST FUNCTION
+-- CAST
 -- ════════════════════════════════════════════════════════
 local function DoCast()
-    if IsFishing or IsReeling or (tick() - LastCast) < 3 then return end
-    
-    local rod = EquipRod()
-    if not rod then 
-        print("❌ No rod found!")
-        return 
-    end
+    if IsFishing or IsReeling or tick() - LastCast < 2 then return end
     
     Stats.Casts = Stats.Casts + 1
     print("🎣 Casting #" .. Stats.Casts)
     
-    -- Activate rod
-    pcall(function() rod:Activate() end)
+    EquipRod()
     
-    -- Also send click
-    task.wait(0.1)
-    QuickClick()
+    local rod = GetRod()
+    if rod then
+        rod:Activate()
+    end
+    
+    VIM:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+    task.wait(0.05)
+    VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0)
     
     IsFishing = true
     LastCast = tick()
     
-    -- Timeout reset
     task.delay(20, function()
-        if IsFishing and not IsReeling then
-            IsFishing = false
-            print("⏰ Cast timeout, recasting...")
+        if IsFishing and not IsReeling then 
+            IsFishing = false 
+            print("⏰ Cast timeout")
         end
     end)
 end
 
 -- ════════════════════════════════════════════════════════
--- MAIN LOOP (IMPROVED!)
+-- ULTRA FAST REEL! (NO DELAY!)
+-- ════════════════════════════════════════════════════════
+local function DoReel()
+    if IsReeling then return end
+    IsReeling = true
+    ReelStartTime = tick()
+    
+    print("⚡ INSTANT REEL!")
+    
+    -- NO DELAY! LANGSUNG ACTION!
+    
+    -- Method 1: Spam click (FASTEST!)
+    for i = 1, 5 do
+        VIM:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+        task.wait(0.03)
+        VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+        task.wait(0.02)
+    end
+    
+    -- Method 2: E key spam
+    for i = 1, 3 do
+        VIM:SendKeyEvent(true, "E", false, game)
+        task.wait(0.03)
+        VIM:SendKeyEvent(false, "E", false, game)
+        task.wait(0.02)
+    end
+    
+    Stats.Fish = Stats.Fish + 1
+    print("✅ Fish #" .. Stats.Fish .. " (took " .. math.floor((tick() - ReelStartTime) * 1000) .. "ms)")
+    
+    -- Short cooldown
+    task.wait(0.3)
+    IsReeling = false
+    IsFishing = false
+    CachedReelUI = nil
+end
+
+-- ════════════════════════════════════════════════════════
+-- REAL-TIME DETECTION (RENDERSTEP = 60 FPS!)
+-- ════════════════════════════════════════════════════════
+local ReelConnection = nil
+
+local function StartReelDetection()
+    if ReelConnection then return end
+    
+    ReelConnection = RunService.RenderStepped:Connect(function()
+        if Config.Enabled and IsFishing and not IsReeling then
+            local hasUI, uiObj = HasReelUI()
+            if hasUI then
+                print("🎯 UI detected at " .. tick())
+                DoReel()
+            end
+        end
+    end)
+    
+    print("✅ RenderStepped detection active! (60 FPS)")
+end
+
+local function StopReelDetection()
+    if ReelConnection then
+        ReelConnection:Disconnect()
+        ReelConnection = nil
+        print("❌ RenderStepped detection stopped")
+    end
+end
+
+-- ════════════════════════════════════════════════════════
+-- MAIN LOOP (CASTING ONLY!)
 -- ════════════════════════════════════════════════════════
 task.spawn(function()
-    while task.wait(0.1) do
-        if Config.Enabled then
-            -- Priority 1: Check for reel minigame
-            local fishingUI = FindFishingUI()
-            if fishingUI and not IsReeling then
-                DoReelMinigame(fishingUI)
-            end
-            
-            -- Priority 2: Check for shake
-            if Config.AutoShake then
-                local shakeUI = FindShakeUI()
-                if shakeUI then
-                    DoShake()
-                end
-            end
-            
-            -- Priority 3: Cast if not doing anything
-            if not IsFishing and not IsReeling then
-                DoCast()
-            end
+    while task.wait(0.5) do
+        if Config.Enabled and not IsFishing and not IsReeling then
+            DoCast()
         end
     end
 end)
 
 -- ════════════════════════════════════════════════════════
--- ALTERNATIVE: RenderStepped for smoother control
--- ════════════════════════════════════════════════════════
-RunService.RenderStepped:Connect(function()
-    if Config.Enabled and IsReeling then
-        local fishingUI = FindFishingUI()
-        if fishingUI and fishingUI.PlayerBar and fishingUI.SafeZone then
-            local playerBar = fishingUI.PlayerBar
-            local safeZone = fishingUI.SafeZone
-            
-            local playerPos = playerBar.AbsolutePosition.Y + (playerBar.AbsoluteSize.Y / 2)
-            local safeCenter = safeZone.AbsolutePosition.Y + (safeZone.AbsoluteSize.Y / 2)
-            
-            if playerPos > safeCenter then
-                StartHold()
-            else
-                StopHold()
-            end
-        end
-    end
-end)
-
--- ════════════════════════════════════════════════════════
--- GUI (IMPROVED)
+-- GUI
 -- ════════════════════════════════════════════════════════
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "FischAutoGUI"
+ScreenGui.Name = "FixedFischGUI"
 ScreenGui.ResetOnSpawn = false
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = PlayerGui
 
 local Main = Instance.new("Frame")
 Main.Parent = ScreenGui
-Main.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+Main.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 Main.BorderSizePixel = 0
 Main.Position = UDim2.new(0.4, 0, 0.3, 0)
-Main.Size = UDim2.new(0, 280, 0, 180)
+Main.Size = UDim2.new(0, 300, 0, 200)
 Main.Active = true
 Main.Draggable = true
 
-Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 12)
+local Corner = Instance.new("UICorner")
+Corner.CornerRadius = UDim.new(0, 15)
+Corner.Parent = Main
 
-local Stroke = Instance.new("UIStroke")
-Stroke.Color = Color3.fromRGB(100, 200, 255)
-Stroke.Thickness = 2
-Stroke.Parent = Main
+local Glow = Instance.new("UIStroke")
+Glow.Color = Color3.fromRGB(0, 255, 255)
+Glow.Thickness = 3
+Glow.Parent = Main
 
--- Title
 local Title = Instance.new("TextLabel")
 Title.Parent = Main
-Title.BackgroundColor3 = Color3.fromRGB(30, 120, 200)
-Title.Size = UDim2.new(1, 0, 0, 40)
+Title.BackgroundColor3 = Color3.fromRGB(255, 150, 0)
+Title.BorderSizePixel = 0
+Title.Size = UDim2.new(1, 0, 0, 50)
 Title.Font = Enum.Font.GothamBold
-Title.Text = "🎣 FISCH AUTO - FIXED"
+Title.Text = "🎣 ULTRA FAST REEL!"
 Title.TextColor3 = Color3.new(1, 1, 1)
-Title.TextSize = 16
-Instance.new("UICorner", Title).CornerRadius = UDim.new(0, 12)
+Title.TextSize = 18
 
--- Status
-local Status = Instance.new("TextLabel")
-Status.Parent = Main
-Status.BackgroundTransparency = 1
-Status.Position = UDim2.new(0, 15, 0, 50)
-Status.Size = UDim2.new(1, -30, 0, 50)
-Status.Font = Enum.Font.Gotham
-Status.TextColor3 = Color3.new(1, 1, 1)
-Status.TextSize = 13
-Status.TextXAlignment = Enum.TextXAlignment.Left
-Status.TextYAlignment = Enum.TextYAlignment.Top
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 15)
+TitleCorner.Parent = Title
+
+local TitleFix = Instance.new("Frame")
+TitleFix.Parent = Title
+TitleFix.BackgroundColor3 = Color3.fromRGB(255, 150, 0)
+TitleFix.BorderSizePixel = 0
+TitleFix.Position = UDim2.new(0, 0, 0.6, 0)
+TitleFix.Size = UDim2.new(1, 0, 0.4, 0)
+
+local StatsLabel = Instance.new("TextLabel")
+StatsLabel.Parent = Main
+StatsLabel.BackgroundTransparency = 1
+StatsLabel.Position = UDim2.new(0, 20, 0, 60)
+StatsLabel.Size = UDim2.new(1, -40, 0, 60)
+StatsLabel.Font = Enum.Font.Gotham
+StatsLabel.Text = "Ready!"
+StatsLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+StatsLabel.TextSize = 14
+StatsLabel.TextXAlignment = Enum.TextXAlignment.Left
+StatsLabel.TextYAlignment = Enum.TextYAlignment.Top
 
 task.spawn(function()
     while task.wait(0.3) do
-        local state = "Idle"
-        if IsReeling then state = "🔄 Reeling..."
-        elseif IsFishing then state = "⏳ Waiting for bite..."
-        elseif Config.Enabled then state = "🎣 Casting..." end
-        
-        Status.Text = string.format(
-            "%s %s\n🐟 Fish: %d | 🎣 Casts: %d\n%s",
-            Config.Enabled and "🟢" or "🔴",
-            Config.Enabled and "ACTIVE" or "STOPPED",
-            Stats.Fish,
-            Stats.Casts,
-            state
-        )
+        if StatsLabel.Parent then
+            local status = Config.Enabled and "⚡ ULTRA FAST!" or "🔴 STOPPED"
+            local hasUI = HasReelUI()
+            local currentAction = ""
+            
+            if Config.Enabled then
+                if IsReeling then
+                    currentAction = "⚡ Reeling..."
+                elseif hasUI then
+                    currentAction = "🎯 UI Found!"
+                elseif IsFishing then
+                    currentAction = "⏳ Waiting bite..."
+                else
+                    currentAction = "🎣 Casting..."
+                end
+            end
+            
+            StatsLabel.Text = string.format(
+                "%s\n%s\n\n🐟 Fish: %d | 🎣 Casts: %d",
+                status,
+                currentAction,
+                Stats.Fish,
+                Stats.Casts
+            )
+        end
     end
 end)
 
--- Toggle Button
-local Toggle = Instance.new("TextButton")
-Toggle.Parent = Main
-Toggle.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-Toggle.Position = UDim2.new(0, 15, 1, -55)
-Toggle.Size = UDim2.new(1, -30, 0, 40)
-Toggle.Font = Enum.Font.GothamBold
-Toggle.Text = "▶ START"
-Toggle.TextColor3 = Color3.new(1, 1, 1)
-Toggle.TextSize = 15
-Instance.new("UICorner", Toggle).CornerRadius = UDim.new(0, 8)
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Parent = Main
+ToggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+ToggleButton.BorderSizePixel = 0
+ToggleButton.Position = UDim2.new(0, 20, 0, 130)
+ToggleButton.Size = UDim2.new(1, -40, 0, 50)
+ToggleButton.Font = Enum.Font.GothamBold
+ToggleButton.Text = "🔴 START ULTRA FAST"
+ToggleButton.TextColor3 = Color3.new(1, 1, 1)
+ToggleButton.TextSize = 16
 
-Toggle.MouseButton1Click:Connect(function()
+local ButtonCorner = Instance.new("UICorner")
+ButtonCorner.CornerRadius = UDim.new(0, 10)
+ButtonCorner.Parent = ToggleButton
+
+ToggleButton.MouseButton1Click:Connect(function()
     Config.Enabled = not Config.Enabled
+    
     if Config.Enabled then
-        Toggle.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
-        Toggle.Text = "⏹ STOP"
-        Stroke.Color = Color3.fromRGB(50, 255, 50)
+        ToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+        ToggleButton.Text = "⚡ STOP"
+        Glow.Color = Color3.fromRGB(0, 255, 0)
+        StartReelDetection()
+        print("✅ ULTRA FAST MODE ACTIVATED!")
     else
-        Toggle.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-        Toggle.Text = "▶ START"
-        Stroke.Color = Color3.fromRGB(100, 200, 255)
-        StopHold()
+        ToggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        ToggleButton.Text = "🔴 START ULTRA FAST"
+        Glow.Color = Color3.fromRGB(255, 0, 0)
+        StopReelDetection()
         IsFishing = false
         IsReeling = false
+        CachedReelUI = nil
+        print("❌ STOPPED!")
     end
 end)
 
--- Keybind
-UIS.InputBegan:Connect(function(input, processed)
-    if processed then return end
+UIS.InputBegan:Connect(function(input)
     if input.KeyCode == Enum.KeyCode.Delete then
         Main.Visible = not Main.Visible
-    elseif input.KeyCode == Enum.KeyCode.F6 then
-        Toggle.MouseButton1Click:Fire()
     end
 end)
 
 print("════════════════════════════════════════")
-print("✅ FISCH AUTO FULLY FIXED!")
+print("✅ ULTRA FAST FISCH AUTO LOADED!")
 print("════════════════════════════════════════")
-print("🔧 IMPROVEMENTS:")
-print("  ✅ Proper HOLD/RELEASE for minigame")
-print("  ✅ Bar position tracking")
-print("  ✅ RenderStepped for smooth control")
-print("  ✅ Shake detection")
-print("  ✅ No jumping (no space key)")
+print("⚡ IMPROVEMENTS:")
+print("  ✅ RenderStepped (60 FPS detection!)")
+print("  ✅ NO delay before reel")
+print("  ✅ Cached UI detection")
+print("  ✅ Spam click method")
+print("  ✅ Shows reel time in MS")
 print("════════════════════════════════════════")
-print("🎮 Controls: DELETE=Hide | F6=Toggle")
+print("🎣 Ready to fish ULTRA FAST!")
 print("════════════════════════════════════════")
