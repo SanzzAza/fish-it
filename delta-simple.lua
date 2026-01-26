@@ -1,40 +1,77 @@
 --[[
-    🎣 FISCH AUTO - ULTRA SIMPLE DELTA VERSION
+    ═══════════════════════════════════════════════════════
+    🎣 FISCH AUTO - AGGRESSIVE VERSION
     By: SanzzAza
-    Minimal GUI, Maximum Compatibility
+    Tries EVERYTHING to make it work!
+    ═══════════════════════════════════════════════════════
 ]]
 
-print("🎣 Loading Fisch Auto...")
+print("════════════════════════════════════════")
+print("🎣 FISCH AUTO - AGGRESSIVE")
+print("════════════════════════════════════════")
+
+repeat task.wait() until game:IsLoaded()
 task.wait(2)
 
-local Player = game.Players.LocalPlayer
-local PlayerGui = Player:WaitForChild("PlayerGui")
+local Players = game:GetService("Players")
+local RS = game:GetService("ReplicatedStorage")
+local UIS = game:GetService("UserInputService")
+local VIM = game:GetService("VirtualInputManager")
 
-print("✅ Player:", Player.Name)
+local Player = Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
 
 -- ════════════════════════════════════════════════════════
 -- CONFIG
 -- ════════════════════════════════════════════════════════
-_G.Config = {
+_G.FischConfig = {
+    Enabled = true,
     AutoCast = true,
     AutoReel = true,
     AutoShake = true,
-    PerfectCatch = true,
-    ReelDelay = 0.5,    -- Bisa diubah (detik)
-    CastDelay = 3,      -- Bisa diubah (detik)
-    DebugMode = true,   -- Set false kalau ga mau spam console
+    
+    -- Timing
+    ReelDelay = 0.3,
+    CastDelay = 3,
+    
+    -- Debug
+    ShowDebug = true,
 }
 
-_G.Stats = {
+local Config = _G.FischConfig
+
+_G.FischStats = {
     Fish = 0,
     Casts = 0,
     Reels = 0,
+    Start = tick(),
 }
 
-local Config = _G.Config
-local Stats = _G.Stats
+local Stats = _G.FischStats
 
-print("✅ Config loaded")
+-- ════════════════════════════════════════════════════════
+-- DEBUG
+-- ════════════════════════════════════════════════════════
+local function Debug(...)
+    if Config.ShowDebug then
+        print("🐛", ...)
+    end
+end
+
+-- ════════════════════════════════════════════════════════
+-- FIND ALL REMOTES
+-- ════════════════════════════════════════════════════════
+local AllRemotes = {}
+
+Debug("Scanning all remotes...")
+for _, v in pairs(RS:GetDescendants()) do
+    if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
+        table.insert(AllRemotes, v)
+        Debug("  Found:", v:GetFullName())
+    end
+end
+
+Debug("Total remotes found:", #AllRemotes)
 
 -- ════════════════════════════════════════════════════════
 -- ANTI-AFK
@@ -43,175 +80,126 @@ Player.Idled:Connect(function()
     game:GetService("VirtualUser"):ClickButton2(Vector2.new())
 end)
 
-print("✅ Anti-AFK enabled")
-
 -- ════════════════════════════════════════════════════════
 -- SIMPLE GUI
 -- ════════════════════════════════════════════════════════
-print("🎨 Creating GUI...")
-
 local SG = Instance.new("ScreenGui")
 SG.Name = "FischGUI"
 SG.Parent = PlayerGui
 SG.ResetOnSpawn = false
 
-print("  ✅ ScreenGui created")
-
--- Main Frame (SIMPLE!)
 local Main = Instance.new("Frame")
 Main.Parent = SG
-Main.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
-Main.BorderSizePixel = 2
-Main.BorderColor3 = Color3.new(0, 0.7, 1)
+Main.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+Main.BorderSizePixel = 3
+Main.BorderColor3 = Color3.fromRGB(0, 170, 255)
 Main.Position = UDim2.new(0.02, 0, 0.3, 0)
-Main.Size = UDim2.new(0, 280, 0, 320)
+Main.Size = UDim2.new(0, 300, 0, 280)
 Main.Active = true
 Main.Draggable = true
 
-print("  ✅ Main frame created")
-
--- Title (SIMPLE!)
 local Title = Instance.new("TextLabel")
 Title.Parent = Main
-Title.BackgroundColor3 = Color3.new(0, 0.7, 1)
+Title.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
 Title.BorderSizePixel = 0
-Title.Size = UDim2.new(1, 0, 0, 35)
+Title.Size = UDim2.new(1, 0, 0, 40)
 Title.Font = Enum.Font.SourceSansBold
-Title.Text = "FISCH AUTO"
+Title.Text = "🎣 FISCH AUTO - AGGRESSIVE"
 Title.TextColor3 = Color3.new(1, 1, 1)
-Title.TextSize = 18
+Title.TextSize = 16
 
-print("  ✅ Title created")
+local Info = Instance.new("TextLabel")
+Info.Parent = Main
+Info.BackgroundTransparency = 1
+Info.Position = UDim2.new(0, 10, 0, 45)
+Info.Size = UDim2.new(1, -20, 0, 40)
+Info.Font = Enum.Font.SourceSans
+Info.TextColor3 = Color3.fromRGB(200, 200, 200)
+Info.TextSize = 11
+Info.TextXAlignment = Enum.TextXAlignment.Left
+Info.TextYAlignment = Enum.TextYAlignment.Top
+Info.Text = "Remotes: " .. #AllRemotes
 
--- Status Label
-local Status = Instance.new("TextLabel")
-Status.Parent = Main
-Status.BackgroundTransparency = 1
-Status.Position = UDim2.new(0, 10, 0, 40)
-Status.Size = UDim2.new(1, -20, 0, 20)
-Status.Font = Enum.Font.SourceSans
-Status.Text = "By: SanzzAza | Status: Loading..."
-Status.TextColor3 = Color3.new(0.7, 0.7, 0.7)
-Status.TextSize = 12
-Status.TextXAlignment = Enum.TextXAlignment.Left
-
--- Update status
 task.spawn(function()
-    while task.wait(1) do
-        if Status and Status.Parent then
-            Status.Text = string.format("Fish: %d | Casts: %d | Reels: %d", Stats.Fish, Stats.Casts, Stats.Reels)
+    while task.wait(0.5) do
+        if Info and Info.Parent then
+            Info.Text = string.format(
+                "Remotes: %d\nFish: %d | Casts: %d\nReels: %d",
+                #AllRemotes,
+                Stats.Fish,
+                Stats.Casts,
+                Stats.Reels
+            )
         end
     end
 end)
 
-print("  ✅ Status label created")
+local yPos = 95
 
--- Toggles (SIMPLE BUTTONS!)
-local yPos = 70
-
-local function MakeButton(text, key)
+local function MakeToggle(name, key)
     local btn = Instance.new("TextButton")
     btn.Parent = Main
-    btn.BackgroundColor3 = Config[key] and Color3.new(0, 0.8, 0) or Color3.new(0.8, 0, 0)
+    btn.BackgroundColor3 = Config[key] and Color3.fromRGB(0, 200, 0) or Color3.fromRGB(200, 0, 0)
     btn.BorderSizePixel = 0
     btn.Position = UDim2.new(0.1, 0, 0, yPos)
     btn.Size = UDim2.new(0.8, 0, 0, 35)
     btn.Font = Enum.Font.SourceSansBold
-    btn.Text = text .. ": " .. (Config[key] and "ON" or "OFF")
+    btn.Text = name .. ": " .. (Config[key] and "ON" or "OFF")
     btn.TextColor3 = Color3.new(1, 1, 1)
-    btn.TextSize = 14
+    btn.TextSize = 13
     
     btn.MouseButton1Click:Connect(function()
         Config[key] = not Config[key]
-        btn.BackgroundColor3 = Config[key] and Color3.new(0, 0.8, 0) or Color3.new(0.8, 0, 0)
-        btn.Text = text .. ": " .. (Config[key] and "ON" or "OFF")
-        print("🔄", text, "=", Config[key])
+        btn.BackgroundColor3 = Config[key] and Color3.fromRGB(0, 200, 0) or Color3.fromRGB(200, 0, 0)
+        btn.Text = name .. ": " .. (Config[key] and "ON" or "OFF")
     end)
     
     yPos = yPos + 40
 end
 
-MakeButton("Auto Cast", "AutoCast")
-MakeButton("Auto Reel", "AutoReel")
-MakeButton("Auto Shake", "AutoShake")
-MakeButton("Perfect Catch", "PerfectCatch")
-MakeButton("Debug Mode", "DebugMode")
+MakeToggle("Auto Cast", "AutoCast")
+MakeToggle("Auto Reel", "AutoReel")
+MakeToggle("Auto Shake", "AutoShake")
+MakeToggle("Debug", "ShowDebug")
 
-print("  ✅ Buttons created")
-
--- Close Button
 local Close = Instance.new("TextButton")
 Close.Parent = Main
-Close.BackgroundColor3 = Color3.new(0.8, 0, 0)
+Close.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
 Close.BorderSizePixel = 0
 Close.Position = UDim2.new(0.1, 0, 0, yPos)
 Close.Size = UDim2.new(0.8, 0, 0, 30)
 Close.Font = Enum.Font.SourceSansBold
 Close.Text = "CLOSE"
 Close.TextColor3 = Color3.new(1, 1, 1)
-Close.TextSize = 14
+Close.TextSize = 13
 
 Close.MouseButton1Click:Connect(function()
     SG:Destroy()
-    print("GUI Closed")
 end)
 
-print("  ✅ Close button created")
-
--- Toggle with DELETE
-game:GetService("UserInputService").InputBegan:Connect(function(input)
+UIS.InputBegan:Connect(function(input)
     if input.KeyCode == Enum.KeyCode.Delete then
         Main.Visible = not Main.Visible
-        print("GUI toggled:", Main.Visible)
     end
 end)
 
-print("✅ GUI fully created!")
-print("════════════════════════════════════════")
-
--- ════════════════════════════════════════════════════════
--- FIND REMOTES
--- ════════════════════════════════════════════════════════
-local RS = game:GetService("ReplicatedStorage")
-local CastRemote = nil
-local ReelRemote = nil
-
-print("🔍 Finding remotes...")
-
-for _, v in pairs(RS:GetDescendants()) do
-    if v:IsA("RemoteEvent") then
-        local name = v.Name:lower()
-        if name:find("cast") and not CastRemote then
-            CastRemote = v
-            print("  ✅ Cast:", v:GetFullName())
-        end
-        if name:find("reel") and not ReelRemote then
-            ReelRemote = v
-            print("  ✅ Reel:", v:GetFullName())
-        end
-    end
-end
-
-if not CastRemote then print("  ⚠️ Cast remote not found") end
-if not ReelRemote then print("  ⚠️ Reel remote not found") end
+Debug("GUI created!")
 
 -- ════════════════════════════════════════════════════════
 -- UTILITY
 -- ════════════════════════════════════════════════════════
-local function Debug(...)
-    if Config.DebugMode then
-        print("🐛", ...)
-    end
+local function GetChar()
+    return Player.Character or Player.CharacterAdded:Wait()
 end
 
 local function GetRod()
     for _, v in pairs(Player.Backpack:GetChildren()) do
-        if v:IsA("Tool") and (v.Name:lower():find("rod") or v.Name:lower():find("fishing")) then
+        if v:IsA("Tool") and v.Name:lower():find("rod") then
             return v
         end
     end
-    for _, v in pairs(Player.Character:GetChildren()) do
-        if v:IsA("Tool") and (v.Name:lower():find("rod") or v.Name:lower():find("fishing")) then
+    for _, v in pairs(GetChar():GetChildren()) do
+        if v:IsA("Tool") and v.Name:lower():find("rod") then
             return v
         end
     end
@@ -221,124 +209,150 @@ end
 local function EquipRod()
     local rod = GetRod()
     if rod and rod.Parent == Player.Backpack then
-        Player.Character.Humanoid:EquipTool(rod)
+        GetChar().Humanoid:EquipTool(rod)
         task.wait(0.3)
+        Debug("Rod equipped")
         return true
     end
     return false
 end
 
 -- ════════════════════════════════════════════════════════
--- FISHING LOGIC
+-- AGGRESSIVE FISHING
 -- ════════════════════════════════════════════════════════
 local IsFishing = false
 local LastCast = 0
 
--- AUTO CAST
+-- AUTO CAST (TRY EVERYTHING!)
 task.spawn(function()
     while task.wait(1) do
-        if Config.AutoCast and not IsFishing then
+        if Config.Enabled and Config.AutoCast and not IsFishing then
             if tick() - LastCast >= Config.CastDelay then
                 Stats.Casts = Stats.Casts + 1
+                Debug("═══ CAST ATTEMPT #" .. Stats.Casts .. " ═══")
                 
-                EquipRod()
-                task.wait(0.2)
-                
-                if CastRemote then
-                    CastRemote:FireServer()
+                -- Method 1: Equip rod
+                if EquipRod() then
+                    task.wait(0.3)
+                    
+                    -- Method 2: Try all remotes with "cast" in name
+                    local fired = false
+                    for _, remote in pairs(AllRemotes) do
+                        local name = remote.Name:lower()
+                        if name:find("cast") or name:find("throw") or name:find("fish") then
+                            Debug("Trying remote:", remote.Name)
+                            pcall(function()
+                                remote:FireServer()
+                            end)
+                            fired = true
+                        end
+                    end
+                    
+                    -- Method 3: Activate tool
+                    if not fired then
+                        local rod = GetRod()
+                        if rod then
+                            Debug("Activating tool:", rod.Name)
+                            rod:Activate()
+                        end
+                    end
+                    
+                    -- Method 4: Click mouse (some games use this)
+                    VIM:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+                    task.wait(0.1)
+                    VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+                    
                     IsFishing = true
                     LastCast = tick()
-                    Debug("Cast fired!")
-                else
-                    local rod = GetRod()
-                    if rod then
-                        rod:Activate()
-                        IsFishing = true
-                        LastCast = tick()
-                        Debug("Rod activated!")
-                    end
+                    Debug("✅ Cast attempted!")
                 end
             end
         end
     end
 end)
 
-print("✅ Cast loop started")
+Debug("Cast loop started")
 
--- AUTO REEL (IMPROVED!)
-task.spawn(function()
-    while task.wait(0.3) do
-        if Config.AutoReel then
-            
-            -- Check every UI in PlayerGui
-            for _, ui in pairs(PlayerGui:GetDescendants()) do
-                local name = ui.Name:lower()
-                
-                -- Look for fishing/reel UI
-                if name:find("fishing") or name:find("reel") or name:find("catch") or name:find("bobber") then
-                    
-                    local isVisible = false
-                    
-                    if ui:IsA("ScreenGui") then
-                        isVisible = ui.Enabled
-                    elseif ui:IsA("Frame") then
-                        isVisible = ui.Visible
-                    end
-                    
-                    if isVisible then
-                        Stats.Reels = Stats.Reels + 1
-                        
-                        Debug("🐟 Reel UI found:", ui.Name)
-                        Debug("  Path:", ui:GetFullName())
-                        Debug("  Waiting", Config.ReelDelay, "seconds...")
-                        
-                        -- WAIT BEFORE REEL!
-                        task.wait(Config.ReelDelay)
-                        
-                        -- Try reel
-                        if ReelRemote then
-                            local quality = Config.PerfectCatch and 100 or 85
-                            ReelRemote:FireServer(quality, true)
-                            Stats.Fish = Stats.Fish + 1
-                            IsFishing = false
-                            Debug("✅ Reeled! Fish #" .. Stats.Fish)
-                            print("🐟 Fish caught! Total:", Stats.Fish)
-                        else
-                            -- Try clicking button
-                            local btn = ui:FindFirstChild("reel", true) or ui:FindFirstChild("button", true)
-                            if btn then
-                                Debug("Clicking button:", btn.Name)
-                                pcall(function() btn:Fire() end)
-                                pcall(function() firesignal(btn.MouseButton1Click) end)
-                                Stats.Fish = Stats.Fish + 1
-                                IsFishing = false
-                                print("🐟 Fish caught! Total:", Stats.Fish)
-                            end
-                        end
-                        
-                        break
-                    end
-                end
-            end
-        end
-    end
-end)
-
-print("✅ Reel loop started")
-
--- AUTO SHAKE
+-- AUTO REEL (TRY EVERYTHING!)
 task.spawn(function()
     while task.wait(0.2) do
-        if Config.AutoShake then
+        if Config.Enabled and Config.AutoReel then
+            
+            -- Method 1: Look for ANY visible UI
             for _, ui in pairs(PlayerGui:GetDescendants()) do
-                if ui.Name:lower():find("shake") and ui:IsA("Frame") and ui.Visible then
-                    Debug("💪 Shake detected!")
-                    for i = 1, 3 do
-                        game:GetService("VirtualInputManager"):SendKeyEvent(true, "W", false, game)
-                        task.wait(0.05)
-                        game:GetService("VirtualInputManager"):SendKeyEvent(false, "W", false, game)
-                        task.wait(0.05)
+                
+                -- Skip our own GUI
+                if ui:IsDescendantOf(SG) then continue end
+                
+                local name = ui.Name:lower()
+                local isVisible = false
+                
+                -- Check visibility
+                if ui:IsA("ScreenGui") then
+                    isVisible = ui.Enabled
+                elseif ui:IsA("Frame") or ui:IsA("ImageLabel") then
+                    isVisible = ui.Visible
+                end
+                
+                -- Look for fishing keywords
+                if isVisible and (
+                    name:find("fish") or 
+                    name:find("reel") or 
+                    name:find("catch") or 
+                    name:find("bobber") or
+                    name:find("bar") or
+                    name:find("progress")
+                ) then
+                    Stats.Reels = Stats.Reels + 1
+                    
+                    Debug("═══ REEL ATTEMPT #" .. Stats.Reels .. " ═══")
+                    Debug("UI Found:", ui.Name, "|", ui:GetFullName())
+                    
+                    task.wait(Config.ReelDelay)
+                    
+                    -- Method 1: Try all reel remotes
+                    local fired = false
+                    for _, remote in pairs(AllRemotes) do
+                        local rname = remote.Name:lower()
+                        if rname:find("reel") or rname:find("catch") or rname:find("finish") then
+                            Debug("Firing:", remote.Name)
+                            pcall(function()
+                                remote:FireServer(100, true)
+                            end)
+                            pcall(function()
+                                remote:FireServer(100)
+                            end)
+                            pcall(function()
+                                remote:FireServer()
+                            end)
+                            fired = true
+                        end
                     end
+                    
+                    -- Method 2: Find and click button
+                    for _, btn in pairs(ui:GetDescendants()) do
+                        if btn:IsA("TextButton") or btn:IsA("ImageButton") then
+                            Debug("Clicking button:", btn.Name)
+                            pcall(function() btn.MouseButton1Click:Fire() end)
+                            pcall(function() firesignal(btn.MouseButton1Click) end)
+                            pcall(function() btn.Activated:Fire() end)
+                        end
+                    end
+                    
+                    -- Method 3: Press E key (some games use this)
+                    VIM:SendKeyEvent(true, "E", false, game)
+                    task.wait(0.1)
+                    VIM:SendKeyEvent(false, "E", false, game)
+                    
+                    -- Method 4: Click mouse
+                    VIM:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+                    task.wait(0.05)
+                    VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+                    
+                    Stats.Fish = Stats.Fish + 1
+                    IsFishing = false
+                    Debug("✅ Reel attempted! Fish #" .. Stats.Fish)
+                    
                     break
                 end
             end
@@ -346,31 +360,70 @@ task.spawn(function()
     end
 end)
 
-print("✅ Shake loop started")
+Debug("Reel loop started")
 
--- SAFETY RESET
+-- AUTO SHAKE (TRY EVERYTHING!)
+task.spawn(function()
+    while task.wait(0.15) do
+        if Config.Enabled and Config.AutoShake then
+            for _, ui in pairs(PlayerGui:GetDescendants()) do
+                if ui:IsDescendantOf(SG) then continue end
+                
+                local name = ui.Name:lower()
+                if (name:find("shake") or name:find("struggle") or name:find("minigame")) and ui:IsA("Frame") and ui.Visible then
+                    Debug("Shake detected!")
+                    
+                    -- Method 1: Try shake remotes
+                    for _, remote in pairs(AllRemotes) do
+                        if remote.Name:lower():find("shake") then
+                            pcall(function() remote:FireServer() end)
+                        end
+                    end
+                    
+                    -- Method 2: Spam W key
+                    for i = 1, 5 do
+                        VIM:SendKeyEvent(true, "W", false, game)
+                        task.wait(0.03)
+                        VIM:SendKeyEvent(false, "W", false, game)
+                        task.wait(0.03)
+                    end
+                    
+                    -- Method 3: Click mouse
+                    for i = 1, 3 do
+                        VIM:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+                        task.wait(0.05)
+                        VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+                        task.wait(0.05)
+                    end
+                    
+                    break
+                end
+            end
+        end
+    end
+end)
+
+Debug("Shake loop started")
+
+-- Safety reset
 task.spawn(function()
     while task.wait(30) do
-        if IsFishing and (tick() - LastCast > 30) then
+        if IsFishing and tick() - LastCast > 30 then
             IsFishing = false
             Debug("Reset timeout")
         end
     end
 end)
 
-print("✅ Safety loop started")
-
 print("════════════════════════════════════════")
-print("✅ FISCH AUTO - FULLY LOADED!")
+print("✅ AGGRESSIVE MODE LOADED!")
 print("════════════════════════════════════════")
-print("GUI should be visible now!")
+print("This script tries EVERYTHING:")
+print("  - All remotes")
+print("  - Button clicks")
+print("  - Key presses")
+print("  - Mouse clicks")
+print("════════════════════════════════════════")
+print("Watch console for debug messages!")
 print("Press DELETE to toggle GUI")
-print("════════════════════════════════════════")
-print("Current Config:")
-print("  ReelDelay:", Config.ReelDelay, "seconds")
-print("  CastDelay:", Config.CastDelay, "seconds")
-print("════════════════════════════════════════")
-print("To change delays, edit script:")
-print("  _G.Config.ReelDelay = 1.0  -- Change this")
-print("  _G.Config.CastDelay = 5.0  -- Change this")
 print("════════════════════════════════════════")
