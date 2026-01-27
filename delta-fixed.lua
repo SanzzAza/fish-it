@@ -1,6 +1,6 @@
 --[[
     ════════════════════════════════════════════════════════
-    🎣 FISCH AUTO - BLATAN V1 (CLEAN GUI)
+    🎣 FISCH AUTO - BLATAN V1 (COLLAPSIBLE GUI)
     ════════════════════════════════════════════════════════
 ]]
 
@@ -17,6 +17,7 @@ local RS = game:GetService("ReplicatedStorage")
 local UIS = game:GetService("UserInputService")
 local VIM = game:GetService("VirtualInputManager")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 
 local Player = Players.LocalPlayer
 local PlayerGui = Player:WaitForChild("PlayerGui")
@@ -40,7 +41,7 @@ local Stats = { Fish = 0, FishSinceLastSell = 0, Casts = 0, TotalSold = 0 }
 local IsFishing, IsReeling, IsSelling, LastCast = false, false, false, 0
 
 -- ════════════════════════════════════════════════════════
--- CORE FUNCTIONS
+-- CORE FUNCTIONS (Same as before)
 -- ════════════════════════════════════════════════════════
 local function ResetState()
     IsFishing, IsReeling, IsSelling, LastCast = false, false, false, 0
@@ -149,7 +150,6 @@ local function SellAllFish()
                     if fireproximityprompt then fireproximityprompt(obj) end
                 end
             end)
-            task.wait(0.3)
         end
     end
     
@@ -158,7 +158,6 @@ local function SellAllFish()
     
     task.wait(0.5)
     if Config.SavedPosition then TeleportToSaved() end
-    task.wait(0.3)
     
     IsSelling, IsFishing, IsReeling, LastCast = false, false, false, 0
     EquipRod()
@@ -232,7 +231,6 @@ local function StartReel()
     end)
 end
 
--- Detection
 local Detection = nil
 local function StartDetection()
     if Detection then return end
@@ -247,7 +245,6 @@ local function StopDetection()
     if Detection then Detection:Disconnect() Detection = nil end
 end
 
--- Main Loop
 task.spawn(function()
     while true do
         task.wait(0.2)
@@ -257,7 +254,6 @@ task.spawn(function()
     end
 end)
 
--- Auto Recovery
 task.spawn(function()
     while true do
         task.wait(5)
@@ -268,20 +264,20 @@ task.spawn(function()
 end)
 
 -- ════════════════════════════════════════════════════════
--- CLEAN GUI
+-- GUI - COLLAPSIBLE SECTIONS
 -- ════════════════════════════════════════════════════════
 local GUI = Instance.new("ScreenGui")
 GUI.Name = "BlatanV1"
 GUI.ResetOnSpawn = false
 GUI.Parent = PlayerGui
 
--- Main Frame
 local Main = Instance.new("Frame")
 Main.Parent = GUI
 Main.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
 Main.BorderSizePixel = 0
 Main.Position = UDim2.new(0, 10, 0.3, 0)
-Main.Size = UDim2.new(0, 180, 0, 245)
+Main.Size = UDim2.new(0, 185, 0, 0) -- Will auto-size
+Main.AutomaticSize = Enum.AutomaticSize.Y
 Main.Active = true
 Main.Draggable = true
 
@@ -289,350 +285,364 @@ local MainCorner = Instance.new("UICorner")
 MainCorner.CornerRadius = UDim.new(0, 8)
 MainCorner.Parent = Main
 
-local Stroke = Instance.new("UIStroke")
-Stroke.Color = Color3.fromRGB(80, 80, 100)
-Stroke.Thickness = 1
-Stroke.Parent = Main
+local MainStroke = Instance.new("UIStroke")
+MainStroke.Color = Color3.fromRGB(60, 60, 80)
+MainStroke.Thickness = 1
+MainStroke.Parent = Main
 
--- Title
-local Title = Instance.new("TextLabel")
-Title.Parent = Main
-Title.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
-Title.Size = UDim2.new(1, 0, 0, 28)
-Title.Font = Enum.Font.GothamBold
-Title.Text = "Blatant V1 Features"
-Title.TextColor3 = Color3.new(1, 1, 1)
-Title.TextSize = 11
+local MainLayout = Instance.new("UIListLayout")
+MainLayout.SortOrder = Enum.SortOrder.LayoutOrder
+MainLayout.Padding = UDim.new(0, 2)
+MainLayout.Parent = Main
 
-local TitleCorner = Instance.new("UICorner")
-TitleCorner.CornerRadius = UDim.new(0, 8)
-TitleCorner.Parent = Title
+local MainPadding = Instance.new("UIPadding")
+MainPadding.PaddingBottom = UDim.new(0, 5)
+MainPadding.Parent = Main
 
--- Toggle Button (Automatically)
-local AutoBtn = Instance.new("TextButton")
-AutoBtn.Parent = Main
-AutoBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
-AutoBtn.Position = UDim2.new(0, 8, 0, 35)
-AutoBtn.Size = UDim2.new(1, -16, 0, 24)
-AutoBtn.Font = Enum.Font.Gotham
-AutoBtn.Text = "Automatically"
-AutoBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
-AutoBtn.TextSize = 10
+-- ════════════════════════════════════════════════════════
+-- HELPER: Create Collapsible Section
+-- ════════════════════════════════════════════════════════
+local function CreateSection(name, order, defaultOpen)
+    local section = Instance.new("Frame")
+    section.Name = name
+    section.Parent = Main
+    section.BackgroundTransparency = 1
+    section.Size = UDim2.new(1, 0, 0, 0)
+    section.AutomaticSize = Enum.AutomaticSize.Y
+    section.LayoutOrder = order
+    
+    local sectionLayout = Instance.new("UIListLayout")
+    sectionLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    sectionLayout.Padding = UDim.new(0, 3)
+    sectionLayout.Parent = section
+    
+    -- Header
+    local header = Instance.new("TextButton")
+    header.Name = "Header"
+    header.Parent = section
+    header.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+    header.Size = UDim2.new(1, 0, 0, 26)
+    header.Font = Enum.Font.GothamBold
+    header.TextColor3 = Color3.new(1, 1, 1)
+    header.TextSize = 11
+    header.LayoutOrder = 0
+    
+    local headerCorner = Instance.new("UICorner")
+    headerCorner.CornerRadius = UDim.new(0, 6)
+    headerCorner.Parent = header
+    
+    -- Arrow
+    local arrow = Instance.new("TextLabel")
+    arrow.Name = "Arrow"
+    arrow.Parent = header
+    arrow.BackgroundTransparency = 1
+    arrow.Position = UDim2.new(0, 8, 0, 0)
+    arrow.Size = UDim2.new(0, 20, 1, 0)
+    arrow.Font = Enum.Font.GothamBold
+    arrow.Text = defaultOpen and "˅" or "›"
+    arrow.TextColor3 = Color3.fromRGB(150, 150, 150)
+    arrow.TextSize = 14
+    arrow.TextXAlignment = Enum.TextXAlignment.Left
+    
+    -- Title
+    local title = Instance.new("TextLabel")
+    title.Name = "Title"
+    title.Parent = header
+    title.BackgroundTransparency = 1
+    title.Position = UDim2.new(0, 25, 0, 0)
+    title.Size = UDim2.new(1, -30, 1, 0)
+    title.Font = Enum.Font.GothamBold
+    title.Text = name
+    title.TextColor3 = Color3.new(1, 1, 1)
+    title.TextSize = 11
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    
+    -- Content
+    local content = Instance.new("Frame")
+    content.Name = "Content"
+    content.Parent = section
+    content.BackgroundTransparency = 1
+    content.Size = UDim2.new(1, 0, 0, 0)
+    content.AutomaticSize = Enum.AutomaticSize.Y
+    content.Visible = defaultOpen
+    content.LayoutOrder = 1
+    
+    local contentLayout = Instance.new("UIListLayout")
+    contentLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    contentLayout.Padding = UDim.new(0, 4)
+    contentLayout.Parent = content
+    
+    local contentPadding = Instance.new("UIPadding")
+    contentPadding.PaddingLeft = UDim.new(0, 8)
+    contentPadding.PaddingRight = UDim.new(0, 8)
+    contentPadding.PaddingTop = UDim.new(0, 4)
+    contentPadding.PaddingBottom = UDim.new(0, 4)
+    contentPadding.Parent = content
+    
+    -- Toggle
+    local isOpen = defaultOpen
+    header.MouseButton1Click:Connect(function()
+        isOpen = not isOpen
+        content.Visible = isOpen
+        arrow.Text = isOpen and "˅" or "›"
+    end)
+    
+    return section, content, header
+end
 
-local AutoCorner = Instance.new("UICorner")
-AutoCorner.CornerRadius = UDim.new(0, 6)
-AutoCorner.Parent = AutoBtn
+-- ════════════════════════════════════════════════════════
+-- HELPER: Create Slider
+-- ════════════════════════════════════════════════════════
+local function CreateSlider(parent, name, min, max, default, order, callback)
+    local frame = Instance.new("Frame")
+    frame.Parent = parent
+    frame.BackgroundTransparency = 1
+    frame.Size = UDim2.new(1, 0, 0, 30)
+    frame.LayoutOrder = order
+    
+    local label = Instance.new("TextLabel")
+    label.Parent = frame
+    label.BackgroundTransparency = 1
+    label.Position = UDim2.new(0, 0, 0, 0)
+    label.Size = UDim2.new(0.6, 0, 0, 14)
+    label.Font = Enum.Font.Gotham
+    label.Text = name
+    label.TextColor3 = Color3.fromRGB(180, 180, 180)
+    label.TextSize = 10
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local value = Instance.new("TextLabel")
+    value.Name = "Value"
+    value.Parent = frame
+    value.BackgroundTransparency = 1
+    value.Position = UDim2.new(0.6, 0, 0, 0)
+    value.Size = UDim2.new(0.4, 0, 0, 14)
+    value.Font = Enum.Font.GothamBold
+    value.Text = string.format("%.2f", default)
+    value.TextColor3 = Color3.new(1, 1, 1)
+    value.TextSize = 10
+    value.TextXAlignment = Enum.TextXAlignment.Right
+    
+    local sliderBg = Instance.new("Frame")
+    sliderBg.Parent = frame
+    sliderBg.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    sliderBg.Position = UDim2.new(0, 0, 0, 17)
+    sliderBg.Size = UDim2.new(1, 0, 0, 8)
+    
+    local sliderCorner = Instance.new("UICorner")
+    sliderCorner.CornerRadius = UDim.new(0, 4)
+    sliderCorner.Parent = sliderBg
+    
+    local fill = Instance.new("Frame")
+    fill.Parent = sliderBg
+    fill.BackgroundColor3 = Color3.fromRGB(100, 130, 255)
+    fill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
+    
+    local fillCorner = Instance.new("UICorner")
+    fillCorner.CornerRadius = UDim.new(0, 4)
+    fillCorner.Parent = fill
+    
+    local dragging = false
+    
+    sliderBg.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+        end
+    end)
+    
+    sliderBg.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    
+    UIS.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local pos = UIS:GetMouseLocation()
+            local rel = math.clamp((pos.X - sliderBg.AbsolutePosition.X) / sliderBg.AbsoluteSize.X, 0, 1)
+            local val = min + (max - min) * rel
+            fill.Size = UDim2.new(rel, 0, 1, 0)
+            value.Text = string.format("%.2f", val)
+            callback(val)
+        end
+    end)
+    
+    return frame
+end
 
--- Delay Reel Section
-local ReelLabel = Instance.new("TextLabel")
-ReelLabel.Parent = Main
-ReelLabel.BackgroundTransparency = 1
-ReelLabel.Position = UDim2.new(0, 10, 0, 65)
-ReelLabel.Size = UDim2.new(0.5, -10, 0, 16)
-ReelLabel.Font = Enum.Font.Gotham
-ReelLabel.Text = "Delay Reel"
-ReelLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
-ReelLabel.TextSize = 10
-ReelLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-local ReelValue = Instance.new("TextLabel")
-ReelValue.Parent = Main
-ReelValue.BackgroundTransparency = 1
-ReelValue.Position = UDim2.new(0.5, 0, 0, 65)
-ReelValue.Size = UDim2.new(0.5, -10, 0, 16)
-ReelValue.Font = Enum.Font.GothamBold
-ReelValue.Text = string.format("%.2f", Config.DelayReels)
-ReelValue.TextColor3 = Color3.new(1, 1, 1)
-ReelValue.TextSize = 10
-ReelValue.TextXAlignment = Enum.TextXAlignment.Right
-
-local ReelSliderBg = Instance.new("Frame")
-ReelSliderBg.Parent = Main
-ReelSliderBg.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-ReelSliderBg.Position = UDim2.new(0, 10, 0, 83)
-ReelSliderBg.Size = UDim2.new(1, -20, 0, 6)
-
-local ReelSliderCorner = Instance.new("UICorner")
-ReelSliderCorner.CornerRadius = UDim.new(0, 3)
-ReelSliderCorner.Parent = ReelSliderBg
-
-local ReelSliderFill = Instance.new("Frame")
-ReelSliderFill.Parent = ReelSliderBg
-ReelSliderFill.BackgroundColor3 = Color3.fromRGB(100, 100, 255)
-ReelSliderFill.Size = UDim2.new(Config.DelayReels / 0.5, 0, 1, 0)
-
-local ReelFillCorner = Instance.new("UICorner")
-ReelFillCorner.CornerRadius = UDim.new(0, 3)
-ReelFillCorner.Parent = ReelSliderFill
-
--- Delay Fishing Section
-local FishLabel = Instance.new("TextLabel")
-FishLabel.Parent = Main
-FishLabel.BackgroundTransparency = 1
-FishLabel.Position = UDim2.new(0, 10, 0, 95)
-FishLabel.Size = UDim2.new(0.5, -10, 0, 16)
-FishLabel.Font = Enum.Font.Gotham
-FishLabel.Text = "Delay Fishing"
-FishLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
-FishLabel.TextSize = 10
-FishLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-local FishValue = Instance.new("TextLabel")
-FishValue.Parent = Main
-FishValue.BackgroundTransparency = 1
-FishValue.Position = UDim2.new(0.5, 0, 0, 95)
-FishValue.Size = UDim2.new(0.5, -10, 0, 16)
-FishValue.Font = Enum.Font.GothamBold
-FishValue.Text = string.format("%.1f", Config.DelayFishing)
-FishValue.TextColor3 = Color3.new(1, 1, 1)
-FishValue.TextSize = 10
-FishValue.TextXAlignment = Enum.TextXAlignment.Right
-
-local FishSliderBg = Instance.new("Frame")
-FishSliderBg.Parent = Main
-FishSliderBg.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-FishSliderBg.Position = UDim2.new(0, 10, 0, 113)
-FishSliderBg.Size = UDim2.new(1, -20, 0, 6)
-
-local FishSliderCorner = Instance.new("UICorner")
-FishSliderCorner.CornerRadius = UDim.new(0, 3)
-FishSliderCorner.Parent = FishSliderBg
-
-local FishSliderFill = Instance.new("Frame")
-FishSliderFill.Parent = FishSliderBg
-FishSliderFill.BackgroundColor3 = Color3.fromRGB(100, 100, 255)
-FishSliderFill.Size = UDim2.new(Config.DelayFishing / 5, 0, 1, 0)
-
-local FishFillCorner = Instance.new("UICorner")
-FishFillCorner.CornerRadius = UDim.new(0, 3)
-FishFillCorner.Parent = FishSliderFill
-
--- Buttons Row 1 (Trading, Menu, Quest)
-local function CreateSmallBtn(name, posX, posY)
+-- ════════════════════════════════════════════════════════
+-- HELPER: Create Toggle Button
+-- ════════════════════════════════════════════════════════
+local function CreateToggle(parent, name, default, order, callback)
     local btn = Instance.new("TextButton")
-    btn.Parent = Main
-    btn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-    btn.Position = UDim2.new(0, posX, 0, posY)
-    btn.Size = UDim2.new(0, 50, 0, 22)
+    btn.Parent = parent
+    btn.BackgroundColor3 = default and Color3.fromRGB(80, 180, 100) or Color3.fromRGB(50, 50, 60)
+    btn.Size = UDim2.new(1, 0, 0, 24)
     btn.Font = Enum.Font.Gotham
     btn.Text = name
-    btn.TextColor3 = Color3.fromRGB(150, 150, 150)
-    btn.TextSize = 9
+    btn.TextColor3 = default and Color3.new(1,1,1) or Color3.fromRGB(150, 150, 150)
+    btn.TextSize = 10
+    btn.LayoutOrder = order
     
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 5)
     corner.Parent = btn
     
+    local state = default
+    btn.MouseButton1Click:Connect(function()
+        state = not state
+        btn.BackgroundColor3 = state and Color3.fromRGB(80, 180, 100) or Color3.fromRGB(50, 50, 60)
+        btn.TextColor3 = state and Color3.new(1,1,1) or Color3.fromRGB(150, 150, 150)
+        callback(state)
+    end)
+    
     return btn
 end
 
-local TradingBtn = CreateSmallBtn("Trading", 10, 128)
-local MenuBtn = CreateSmallBtn("Menu", 65, 128)
-local QuestBtn = CreateSmallBtn("Quest", 120, 128)
+-- ════════════════════════════════════════════════════════
+-- HELPER: Create Button
+-- ════════════════════════════════════════════════════════
+local function CreateButton(parent, name, color, order, callback)
+    local btn = Instance.new("TextButton")
+    btn.Parent = parent
+    btn.BackgroundColor3 = color
+    btn.Size = UDim2.new(1, 0, 0, 24)
+    btn.Font = Enum.Font.Gotham
+    btn.Text = name
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.TextSize = 10
+    btn.LayoutOrder = order
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 5)
+    corner.Parent = btn
+    
+    btn.MouseButton1Click:Connect(callback)
+    
+    return btn
+end
 
--- Buttons Row 2 (Teleport, Stable Result v1)
-local TeleportBtn = Instance.new("TextButton")
-TeleportBtn.Parent = Main
-TeleportBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-TeleportBtn.Position = UDim2.new(0, 10, 0, 155)
-TeleportBtn.Size = UDim2.new(0, 55, 0, 22)
-TeleportBtn.Font = Enum.Font.Gotham
-TeleportBtn.Text = "Teleport"
-TeleportBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
-TeleportBtn.TextSize = 9
+-- ════════════════════════════════════════════════════════
+-- BUILD GUI SECTIONS
+-- ════════════════════════════════════════════════════════
 
-local TPCorner = Instance.new("UICorner")
-TPCorner.CornerRadius = UDim.new(0, 5)
-TPCorner.Parent = TeleportBtn
+-- ═══ SECTION 1: Blatant V1 ═══
+local sec1, content1, header1 = CreateSection("Blatant V1", 1, true)
+header1.BackgroundColor3 = Color3.fromRGB(80, 60, 140)
 
-local StableBtn = Instance.new("TextButton")
-StableBtn.Parent = Main
-StableBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-StableBtn.Position = UDim2.new(0, 70, 0, 155)
-StableBtn.Size = UDim2.new(0, 100, 0, 22)
-StableBtn.Font = Enum.Font.Gotham
-StableBtn.Text = "Stable Result v1"
-StableBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
-StableBtn.TextSize = 9
+CreateSlider(content1, "Delay Reels", 0.01, 0.5, Config.DelayReels, 1, function(v)
+    Config.DelayReels = v
+end)
 
-local StableCorner = Instance.new("UICorner")
-StableCorner.CornerRadius = UDim.new(0, 5)
-StableCorner.Parent = StableBtn
+CreateSlider(content1, "Delay Fishing", 0.1, 3, Config.DelayFishing, 2, function(v)
+    Config.DelayFishing = v
+end)
 
--- Click Button (Main Toggle)
-local ClickBtn = Instance.new("TextButton")
-ClickBtn.Parent = Main
-ClickBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 90)
-ClickBtn.Position = UDim2.new(0, 10, 0, 183)
-ClickBtn.Size = UDim2.new(1, -20, 0, 28)
-ClickBtn.Font = Enum.Font.GothamBold
-ClickBtn.Text = "Click"
-ClickBtn.TextColor3 = Color3.new(1, 1, 1)
-ClickBtn.TextSize = 12
+-- ═══ SECTION 2: Features ═══
+local sec2, content2 = CreateSection("Features", 2, false)
 
-local ClickCorner = Instance.new("UICorner")
-ClickCorner.CornerRadius = UDim.new(0, 6)
-ClickCorner.Parent = ClickBtn
+CreateToggle(content2, "Auto Sell (5 Fish)", Config.AutoSell, 1, function(v)
+    Config.AutoSell = v
+end)
 
--- Status Label
+CreateToggle(content2, "Hide Animation", Config.HideAnimation, 2, function(v)
+    Config.HideAnimation = v
+end)
+
+CreateToggle(content2, "Auto Teleport", Config.AutoTeleport, 3, function(v)
+    Config.AutoTeleport = v
+end)
+
+-- ═══ SECTION 3: Teleport ═══
+local sec3, content3 = CreateSection("Teleport", 3, false)
+
+local saveBtn = CreateButton(content3, "📍 Save Position", Color3.fromRGB(60, 120, 200), 1, function()
+    if SavePosition() then
+        saveBtn.Text = "✅ Saved!"
+        task.delay(1, function() saveBtn.Text = "📍 Save Position" end)
+    end
+end)
+
+CreateButton(content3, "🚀 Teleport Back", Color3.fromRGB(200, 120, 60), 2, function()
+    TeleportToSaved()
+end)
+
+-- ═══ SECTION 4: Actions ═══
+local sec4, content4 = CreateSection("Actions", 4, false)
+
+CreateButton(content4, "💰 Sell Now", Color3.fromRGB(200, 160, 60), 1, function()
+    if not IsSelling then task.spawn(SellAllFish) end
+end)
+
+CreateButton(content4, "🔄 Reset State", Color3.fromRGB(100, 100, 100), 2, function()
+    ResetState()
+end)
+
+-- ═══ MAIN START BUTTON ═══
+local startSection = Instance.new("Frame")
+startSection.Parent = Main
+startSection.BackgroundTransparency = 1
+startSection.Size = UDim2.new(1, 0, 0, 40)
+startSection.LayoutOrder = 10
+
+local startPadding = Instance.new("UIPadding")
+startPadding.PaddingLeft = UDim.new(0, 5)
+startPadding.PaddingRight = UDim.new(0, 5)
+startPadding.PaddingTop = UDim.new(0, 5)
+startPadding.Parent = startSection
+
+local StartBtn = Instance.new("TextButton")
+StartBtn.Parent = startSection
+StartBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+StartBtn.Size = UDim2.new(1, 0, 0, 32)
+StartBtn.Font = Enum.Font.GothamBold
+StartBtn.Text = "▶ START"
+StartBtn.TextColor3 = Color3.new(1, 1, 1)
+StartBtn.TextSize = 13
+
+local startCorner = Instance.new("UICorner")
+startCorner.CornerRadius = UDim.new(0, 6)
+startCorner.Parent = StartBtn
+
+StartBtn.MouseButton1Click:Connect(function()
+    Config.Enabled = not Config.Enabled
+    if Config.Enabled then
+        StartBtn.BackgroundColor3 = Color3.fromRGB(80, 200, 100)
+        StartBtn.Text = "⏹ STOP"
+        MainStroke.Color = Color3.fromRGB(80, 200, 100)
+        ResetState()
+        StartDetection()
+        if Config.SavedPosition then TeleportToSaved() end
+    else
+        StartBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+        StartBtn.Text = "▶ START"
+        MainStroke.Color = Color3.fromRGB(60, 60, 80)
+        StopDetection()
+        ResetState()
+    end
+end)
+
+-- ═══ STATUS BAR ═══
+local statusSection = Instance.new("Frame")
+statusSection.Parent = Main
+statusSection.BackgroundTransparency = 1
+statusSection.Size = UDim2.new(1, 0, 0, 20)
+statusSection.LayoutOrder = 11
+
 local StatusLabel = Instance.new("TextLabel")
-StatusLabel.Parent = Main
+StatusLabel.Parent = statusSection
 StatusLabel.BackgroundTransparency = 1
-StatusLabel.Position = UDim2.new(0, 10, 0, 216)
-StatusLabel.Size = UDim2.new(1, -20, 0, 22)
+StatusLabel.Size = UDim2.new(1, 0, 1, 0)
 StatusLabel.Font = Enum.Font.Gotham
 StatusLabel.Text = "🐟 0 | 💰 0"
 StatusLabel.TextColor3 = Color3.fromRGB(120, 120, 120)
 StatusLabel.TextSize = 10
 
--- ════════════════════════════════════════════════════════
--- SLIDER LOGIC
--- ════════════════════════════════════════════════════════
-local draggingReel, draggingFish = false, false
-
-ReelSliderBg.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then draggingReel = true end
-end)
-
-ReelSliderBg.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then draggingReel = false end
-end)
-
-FishSliderBg.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then draggingFish = true end
-end)
-
-FishSliderBg.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then draggingFish = false end
-end)
-
-UIS.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement then
-        if draggingReel then
-            local pos = UIS:GetMouseLocation()
-            local rel = math.clamp((pos.X - ReelSliderBg.AbsolutePosition.X) / ReelSliderBg.AbsoluteSize.X, 0, 1)
-            Config.DelayReels = 0.01 + rel * 0.49
-            ReelSliderFill.Size = UDim2.new(rel, 0, 1, 0)
-            ReelValue.Text = string.format("%.2f", Config.DelayReels)
-        end
-        
-        if draggingFish then
-            local pos = UIS:GetMouseLocation()
-            local rel = math.clamp((pos.X - FishSliderBg.AbsolutePosition.X) / FishSliderBg.AbsoluteSize.X, 0, 1)
-            Config.DelayFishing = 0.1 + rel * 4.9
-            FishSliderFill.Size = UDim2.new(rel, 0, 1, 0)
-            FishValue.Text = string.format("%.1f", Config.DelayFishing)
-        end
-    end
-end)
-
--- ════════════════════════════════════════════════════════
--- BUTTON LOGIC
--- ════════════════════════════════════════════════════════
-
--- Main Toggle (Automatically)
-AutoBtn.MouseButton1Click:Connect(function()
-    Config.Enabled = not Config.Enabled
-    if Config.Enabled then
-        AutoBtn.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
-        AutoBtn.TextColor3 = Color3.new(1, 1, 1)
-        Stroke.Color = Color3.fromRGB(80, 200, 120)
-        ResetState()
-        StartDetection()
-        if Config.SavedPosition then TeleportToSaved() end
-    else
-        AutoBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
-        AutoBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
-        Stroke.Color = Color3.fromRGB(80, 80, 100)
-        StopDetection()
-        ResetState()
-    end
-end)
-
--- Click Button
-ClickBtn.MouseButton1Click:Connect(function()
-    Config.Enabled = not Config.Enabled
-    if Config.Enabled then
-        ClickBtn.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
-        AutoBtn.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
-        AutoBtn.TextColor3 = Color3.new(1, 1, 1)
-        Stroke.Color = Color3.fromRGB(80, 200, 120)
-        ResetState()
-        StartDetection()
-    else
-        ClickBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 90)
-        AutoBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
-        AutoBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
-        Stroke.Color = Color3.fromRGB(80, 80, 100)
-        StopDetection()
-        ResetState()
-    end
-end)
-
--- Teleport Button (Save/TP Position)
-local tpMode = "save"
-TeleportBtn.MouseButton1Click:Connect(function()
-    if tpMode == "save" then
-        if SavePosition() then
-            TeleportBtn.Text = "TP Back"
-            TeleportBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 255)
-            TeleportBtn.TextColor3 = Color3.new(1, 1, 1)
-            tpMode = "tp"
-        end
-    else
-        TeleportToSaved()
-        TeleportBtn.Text = "Teleport"
-        TeleportBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-        TeleportBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
-        tpMode = "save"
-    end
-end)
-
--- Stable Result (Auto Sell Toggle)
-StableBtn.MouseButton1Click:Connect(function()
-    Config.AutoSell = not Config.AutoSell
-    if Config.AutoSell then
-        StableBtn.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
-        StableBtn.TextColor3 = Color3.new(1, 1, 1)
-    else
-        StableBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-        StableBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
-    end
-end)
-
--- Menu (Hide Animation)
-MenuBtn.MouseButton1Click:Connect(function()
-    Config.HideAnimation = not Config.HideAnimation
-    if Config.HideAnimation then
-        MenuBtn.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
-        MenuBtn.TextColor3 = Color3.new(1, 1, 1)
-    else
-        MenuBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-        MenuBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
-    end
-end)
-
--- Quest (Auto Teleport)
-QuestBtn.MouseButton1Click:Connect(function()
-    Config.AutoTeleport = not Config.AutoTeleport
-    if Config.AutoTeleport then
-        QuestBtn.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
-        QuestBtn.TextColor3 = Color3.new(1, 1, 1)
-    else
-        QuestBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-        QuestBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
-    end
-end)
-
--- Trading (Sell Now)
-TradingBtn.MouseButton1Click:Connect(function()
-    if not IsSelling then task.spawn(SellAllFish) end
-end)
-
--- Status Update
 task.spawn(function()
     while task.wait(0.3) do
-        StatusLabel.Text = string.format("🐟 %d | 💰 %d | [%d/5]", Stats.Fish, Stats.TotalSold, Stats.FishSinceLastSell)
+        local status = Config.Enabled and "🟢" or "🔴"
+        StatusLabel.Text = string.format("%s 🐟 %d | 💰 %d | [%d/%d]", 
+            status, Stats.Fish, Stats.TotalSold, Stats.FishSinceLastSell, Config.SellThreshold)
     end
 end)
 
@@ -644,7 +654,7 @@ UIS.InputBegan:Connect(function(input, processed)
     if input.KeyCode == Enum.KeyCode.Delete then
         Main.Visible = not Main.Visible
     elseif input.KeyCode == Enum.KeyCode.F6 then
-        ClickBtn.MouseButton1Click:Fire()
+        StartBtn.MouseButton1Click:Fire()
     end
 end)
 
