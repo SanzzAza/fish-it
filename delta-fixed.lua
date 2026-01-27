@@ -1,8 +1,8 @@
 --[[
     ════════════════════════════════════════════════════════
-    🎣 FISCH AUTO - SPAM REEL + AUTO SELL
+    🎣 FISCH AUTO - SPAM REEL + AUTO SELL ALL FISH
     CLICK TERUS SAMPAI IKAN MASUK!
-    AUTO SELL SETELAH 5 IKAN!
+    AUTO SELL SEMUA IKAN DI INVENTORY!
     ════════════════════════════════════════════════════════
 ]]
 
@@ -91,198 +91,402 @@ local function EquipRod()
 end
 
 -- ════════════════════════════════════════════════════════
--- AUTO SELL FUNCTIONS
+-- FISCH SELL SYSTEM - JUAL SEMUA IKAN DI INVENTORY
 -- ════════════════════════════════════════════════════════
-local function FindSellRemote()
-    local possibleNames = {
-        "SellFish", "SellAll", "Sell", "SellAllFish",
-        "sellfish", "sellall", "sell",
-        "SellItem", "SellItems", "QuickSell"
+
+-- Debug: Print semua remote yang ada
+local function DebugRemotes()
+    print("═══════ DEBUG REMOTES ═══════")
+    for _, obj in pairs(RS:GetDescendants()) do
+        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+            print("📡 " .. obj.ClassName .. ": " .. obj:GetFullName())
+        end
+    end
+    print("═════════════════════════════")
+end
+
+-- Cari Network/Remotes folder di Fisch
+local function GetNetworkFolder()
+    local possiblePaths = {
+        RS:FindFirstChild("Network"),
+        RS:FindFirstChild("Remotes"),
+        RS:FindFirstChild("Events"),
+        RS:FindFirstChild("RemoteEvents"),
+        RS:FindFirstChild("Comm"),
+        RS:FindFirstChild("Packages") and RS.Packages:FindFirstChild("Knit") and RS.Packages.Knit:FindFirstChild("Services"),
     }
     
-    -- Cari di ReplicatedStorage
-    for _, name in pairs(possibleNames) do
-        local remote = RS:FindFirstChild(name, true)
-        if remote and (remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction")) then
-            return remote
+    for _, folder in pairs(possiblePaths) do
+        if folder then
+            return folder
         end
     end
     
-    -- Cari di Remotes folder
-    local remotesFolder = RS:FindFirstChild("Remotes") or RS:FindFirstChild("Events") or RS:FindFirstChild("Network")
-    if remotesFolder then
-        for _, name in pairs(possibleNames) do
-            local remote = remotesFolder:FindFirstChild(name)
-            if remote then
-                return remote
-            end
+    return RS
+end
+
+-- Cari inventory ikan player
+local function GetPlayerInventory()
+    local possiblePaths = {
+        Player:FindFirstChild("Data"),
+        Player:FindFirstChild("PlayerData"),
+        Player:FindFirstChild("Inventory"),
+        Player:FindFirstChild("Fish"),
+        Player:FindFirstChild("Fishes"),
+        Player:FindFirstChild("Catches"),
+    }
+    
+    for _, data in pairs(possiblePaths) do
+        if data then
+            return data
         end
-        
-        -- Cari yang mengandung "sell"
-        for _, remote in pairs(remotesFolder:GetDescendants()) do
-            if (remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction")) then
-                if remote.Name:lower():find("sell") then
-                    return remote
+    end
+    
+    -- Cari di leaderstats atau stats
+    local leaderstats = Player:FindFirstChild("leaderstats")
+    if leaderstats then
+        return leaderstats
+    end
+    
+    return nil
+end
+
+-- Cari semua remote yang berhubungan dengan sell
+local function FindAllSellRemotes()
+    local sellRemotes = {}
+    
+    local keywords = {"sell", "shop", "vendor", "merchant", "trade", "exchange"}
+    
+    for _, obj in pairs(RS:GetDescendants()) do
+        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+            local name = obj.Name:lower()
+            for _, keyword in pairs(keywords) do
+                if name:find(keyword) then
+                    table.insert(sellRemotes, obj)
+                    break
                 end
             end
         end
     end
     
-    -- Cari semua remote yang mengandung "sell"
-    for _, remote in pairs(RS:GetDescendants()) do
-        if (remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction")) then
-            if remote.Name:lower():find("sell") then
-                return remote
-            end
-        end
-    end
-    
-    return nil
+    return sellRemotes
 end
 
-local function FindSellNPC()
-    local workspace = game:GetService("Workspace")
-    local possibleNames = {
-        "Sell", "SellNPC", "FishSeller", "Merchant",
-        "Shop", "Store", "Vendor", "SellArea"
+-- MAIN SELL FUNCTION - JUAL SEMUA IKAN
+local function SellAllFish()
+    if IsSelling then return false end
+    IsSelling = true
+    
+    print("💰 ═══════════════════════════════════")
+    print("💰 SELLING ALL FISH IN INVENTORY...")
+    print("💰 ═══════════════════════════════════")
+    
+    local soldCount = 0
+    local success = false
+    
+    -- ═══════════════════════════════════════════
+    -- METHOD 1: Fisch specific remotes
+    -- ═══════════════════════════════════════════
+    local networkFolder = GetNetworkFolder()
+    
+    -- Coba berbagai nama remote yang umum di Fisch
+    local fischRemoteNames = {
+        "SellFish",
+        "SellAllFish", 
+        "Sell",
+        "SellAll",
+        "sellfish",
+        "sellall",
+        "QuickSell",
+        "InstaSell",
+        "SellInventory",
+        "SellCatch",
+        "SellCatches",
     }
     
-    -- Cari NPC
-    for _, name in pairs(possibleNames) do
-        local npc = workspace:FindFirstChild(name, true)
-        if npc then
-            return npc
+    for _, remoteName in pairs(fischRemoteNames) do
+        local remote = RS:FindFirstChild(remoteName, true)
+        if remote then
+            print("💰 Found: " .. remote:GetFullName())
+            
+            pcall(function()
+                if remote:IsA("RemoteEvent") then
+                    -- Coba berbagai parameter
+                    remote:FireServer()
+                    task.wait(0.1)
+                    remote:FireServer("All")
+                    task.wait(0.1)
+                    remote:FireServer("all")
+                    task.wait(0.1)
+                    remote:FireServer(true)
+                    task.wait(0.1)
+                    remote:FireServer({All = true})
+                    task.wait(0.1)
+                    remote:FireServer("SellAll")
+                elseif remote:IsA("RemoteFunction") then
+                    remote:InvokeServer()
+                    task.wait(0.1)
+                    remote:InvokeServer("All")
+                    task.wait(0.1)
+                    remote:InvokeServer(true)
+                end
+            end)
+            
+            success = true
+            task.wait(0.2)
         end
     end
     
-    -- Cari model yang mengandung "sell"
-    for _, obj in pairs(workspace:GetDescendants()) do
-        if obj:IsA("Model") or obj:IsA("Part") then
-            if obj.Name:lower():find("sell") then
-                return obj
+    -- ═══════════════════════════════════════════
+    -- METHOD 2: Cari di Network folder
+    -- ═══════════════════════════════════════════
+    if networkFolder and networkFolder ~= RS then
+        print("💰 Checking Network folder...")
+        
+        for _, obj in pairs(networkFolder:GetDescendants()) do
+            if (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) and obj.Name:lower():find("sell") then
+                print("💰 Network Remote: " .. obj.Name)
+                
+                pcall(function()
+                    if obj:IsA("RemoteEvent") then
+                        obj:FireServer()
+                        obj:FireServer("All")
+                        obj:FireServer(true)
+                    else
+                        obj:InvokeServer()
+                        obj:InvokeServer("All")
+                    end
+                end)
+                
+                success = true
+                task.wait(0.2)
             end
         end
     end
     
-    return nil
-end
-
-local function FindSellProximityPrompt()
-    local workspace = game:GetService("Workspace")
+    -- ═══════════════════════════════════════════
+    -- METHOD 3: Jual per-ikan dari inventory
+    -- ═══════════════════════════════════════════
+    local inventory = GetPlayerInventory()
+    if inventory then
+        print("💰 Found inventory: " .. inventory:GetFullName())
+        
+        -- Cari remote untuk jual individual fish
+        local sellFishRemote = RS:FindFirstChild("SellFish", true) or 
+                               RS:FindFirstChild("Sell", true) or
+                               RS:FindFirstChild("SellItem", true)
+        
+        if sellFishRemote then
+            for _, item in pairs(inventory:GetChildren()) do
+                if item:IsA("ValueBase") or item:IsA("Folder") then
+                    print("💰 Selling: " .. item.Name)
+                    
+                    pcall(function()
+                        if sellFishRemote:IsA("RemoteEvent") then
+                            sellFishRemote:FireServer(item.Name)
+                            sellFishRemote:FireServer(item)
+                            sellFishRemote:FireServer({Name = item.Name})
+                            sellFishRemote:FireServer({Fish = item.Name})
+                        else
+                            sellFishRemote:InvokeServer(item.Name)
+                        end
+                    end)
+                    
+                    soldCount = soldCount + 1
+                    task.wait(0.05)
+                end
+            end
+            success = true
+        end
+    end
+    
+    -- ═══════════════════════════════════════════
+    -- METHOD 4: Fire semua sell-related remotes
+    -- ═══════════════════════════════════════════
+    local allSellRemotes = FindAllSellRemotes()
+    if #allSellRemotes > 0 then
+        print("💰 Found " .. #allSellRemotes .. " sell remotes")
+        
+        for _, remote in pairs(allSellRemotes) do
+            print("💰 Trying: " .. remote:GetFullName())
+            
+            pcall(function()
+                if remote:IsA("RemoteEvent") then
+                    remote:FireServer()
+                    remote:FireServer("All")
+                    remote:FireServer("all")
+                    remote:FireServer(true)
+                    remote:FireServer("Fish")
+                    remote:FireServer({Type = "All"})
+                    remote:FireServer({SellAll = true})
+                elseif remote:IsA("RemoteFunction") then
+                    pcall(function() remote:InvokeServer() end)
+                    pcall(function() remote:InvokeServer("All") end)
+                    pcall(function() remote:InvokeServer(true) end)
+                end
+            end)
+            
+            success = true
+            task.wait(0.1)
+        end
+    end
+    
+    -- ═══════════════════════════════════════════
+    -- METHOD 5: ProximityPrompt Sell
+    -- ═══════════════════════════════════════════
+    print("💰 Checking ProximityPrompts...")
     
     for _, obj in pairs(workspace:GetDescendants()) do
         if obj:IsA("ProximityPrompt") then
             local name = obj.Name:lower()
             local parentName = obj.Parent and obj.Parent.Name:lower() or ""
             local actionText = obj.ActionText and obj.ActionText:lower() or ""
+            local objectText = obj.ObjectText and obj.ObjectText:lower() or ""
             
-            if name:find("sell") or parentName:find("sell") or actionText:find("sell") then
-                return obj
+            if name:find("sell") or parentName:find("sell") or 
+               actionText:find("sell") or objectText:find("sell") then
+                
+                print("💰 Found sell prompt: " .. obj:GetFullName())
+                
+                -- Teleport ke prompt
+                if obj.Parent and obj.Parent:IsA("BasePart") then
+                    local promptPos = obj.Parent.Position
+                    if Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
+                        Player.Character.HumanoidRootPart.CFrame = CFrame.new(promptPos + Vector3.new(0, 3, 3))
+                        task.wait(0.5)
+                    end
+                end
+                
+                -- Fire prompt
+                pcall(function()
+                    if fireproximityprompt then
+                        fireproximityprompt(obj)
+                    end
+                end)
+                
+                success = true
+                task.wait(0.5)
             end
         end
     end
     
-    return nil
-end
-
-local function TeleportToSellArea()
-    local sellNPC = FindSellNPC()
-    if sellNPC and Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
-        local targetPos
-        
-        if sellNPC:IsA("Model") and sellNPC:FindFirstChild("HumanoidRootPart") then
-            targetPos = sellNPC.HumanoidRootPart.Position
-        elseif sellNPC:IsA("Model") and sellNPC.PrimaryPart then
-            targetPos = sellNPC.PrimaryPart.Position
-        elseif sellNPC:IsA("BasePart") then
-            targetPos = sellNPC.Position
-        elseif sellNPC:IsA("Model") then
-            local part = sellNPC:FindFirstChildWhichIsA("BasePart")
-            if part then
-                targetPos = part.Position
-            end
-        end
-        
-        if targetPos then
-            Player.Character.HumanoidRootPart.CFrame = CFrame.new(targetPos + Vector3.new(0, 3, 5))
-            return true
-        end
-    end
-    return false
-end
-
-local function DoSell()
-    if IsSelling then return false end
-    IsSelling = true
+    -- ═══════════════════════════════════════════
+    -- METHOD 6: GUI Sell Buttons
+    -- ═══════════════════════════════════════════
+    print("💰 Checking GUI sell buttons...")
     
-    print("💰 Starting Auto Sell...")
-    
-    local success = false
-    
-    -- Method 1: Cari dan fire RemoteEvent/RemoteFunction
-    local sellRemote = FindSellRemote()
-    if sellRemote then
-        print("💰 Found sell remote: " .. sellRemote.Name)
-        
-        pcall(function()
-            if sellRemote:IsA("RemoteEvent") then
-                sellRemote:FireServer()
-                sellRemote:FireServer("all")
-                sellRemote:FireServer("All")
-                sellRemote:FireServer(true)
-            elseif sellRemote:IsA("RemoteFunction") then
-                sellRemote:InvokeServer()
-                sellRemote:InvokeServer("all")
-            end
-        end)
-        
-        success = true
-        task.wait(0.5)
-    end
-    
-    -- Method 2: Cari ProximityPrompt sell
-    local sellPrompt = FindSellProximityPrompt()
-    if sellPrompt then
-        print("💰 Found sell prompt: " .. sellPrompt.Name)
-        
-        -- Teleport ke prompt jika perlu
-        if sellPrompt.Parent and sellPrompt.Parent:IsA("BasePart") then
-            local promptPos = sellPrompt.Parent.Position
-            if Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
-                local distance = (Player.Character.HumanoidRootPart.Position - promptPos).Magnitude
-                if distance > sellPrompt.MaxActivationDistance then
-                    Player.Character.HumanoidRootPart.CFrame = CFrame.new(promptPos + Vector3.new(0, 3, 3))
-                    task.wait(0.5)
+    for _, gui in pairs(PlayerGui:GetChildren()) do
+        if gui:IsA("ScreenGui") and gui.Enabled and gui.Name ~= "FischSpamGUI" then
+            for _, obj in pairs(gui:GetDescendants()) do
+                if (obj:IsA("TextButton") or obj:IsA("ImageButton")) and obj.Visible then
+                    local name = obj.Name:lower()
+                    local text = obj:IsA("TextButton") and obj.Text:lower() or ""
+                    
+                    if name:find("sell") or text:find("sell") then
+                        print("💰 Found GUI button: " .. obj.Name .. " - " .. text)
+                        
+                        pcall(function()
+                            if getconnections then
+                                for _, conn in pairs(getconnections(obj.MouseButton1Click)) do
+                                    conn:Fire()
+                                end
+                            end
+                            
+                            if firesignal then
+                                firesignal(obj.MouseButton1Click)
+                            end
+                        end)
+                        
+                        -- Juga coba click langsung
+                        pcall(function()
+                            local pos = obj.AbsolutePosition + obj.AbsoluteSize / 2
+                            VIM:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 0)
+                            task.wait(0.05)
+                            VIM:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 0)
+                        end)
+                        
+                        success = true
+                        task.wait(0.3)
+                        
+                        -- Cari "Sell All" atau "Confirm" button
+                        for _, btn in pairs(gui:GetDescendants()) do
+                            if (btn:IsA("TextButton") or btn:IsA("ImageButton")) and btn.Visible then
+                                local btnName = btn.Name:lower()
+                                local btnText = btn:IsA("TextButton") and btn.Text:lower() or ""
+                                
+                                if btnName:find("all") or btnText:find("all") or
+                                   btnName:find("confirm") or btnText:find("confirm") or
+                                   btnName:find("yes") or btnText:find("yes") then
+                                    
+                                    print("💰 Clicking: " .. btn.Name)
+                                    
+                                    pcall(function()
+                                        if getconnections then
+                                            for _, conn in pairs(getconnections(btn.MouseButton1Click)) do
+                                                conn:Fire()
+                                            end
+                                        end
+                                    end)
+                                    
+                                    task.wait(0.2)
+                                end
+                            end
+                        end
+                    end
                 end
             end
         end
-        
-        pcall(function()
-            fireproximityprompt(sellPrompt)
-        end)
-        
-        success = true
-        task.wait(0.5)
     end
     
-    -- Method 3: Cari tombol sell di GUI
-    for _, gui in pairs(PlayerGui:GetChildren()) do
-        if gui:IsA("ScreenGui") and gui.Enabled then
-            for _, obj in pairs(gui:GetDescendants()) do
-                if obj:IsA("TextButton") or obj:IsA("ImageButton") then
-                    local name = obj.Name:lower()
-                    local text = ""
-                    if obj:IsA("TextButton") then
-                        text = obj.Text:lower()
-                    end
-                    
-                    if name:find("sell") or text:find("sell") then
-                        print("💰 Found sell button: " .. obj.Name)
+    -- ═══════════════════════════════════════════
+    -- METHOD 7: Teleport ke NPC dan interact
+    -- ═══════════════════════════════════════════
+    print("💰 Looking for sell NPCs...")
+    
+    local sellNPCNames = {"Sell", "SellNPC", "Merchant", "Vendor", "Shop", "FishSeller", "Seller", "NPC"}
+    
+    for _, npcName in pairs(sellNPCNames) do
+        local npc = workspace:FindFirstChild(npcName, true)
+        if npc then
+            print("💰 Found NPC: " .. npc:GetFullName())
+            
+            local targetPos = nil
+            
+            if npc:IsA("Model") then
+                if npc:FindFirstChild("HumanoidRootPart") then
+                    targetPos = npc.HumanoidRootPart.Position
+                elseif npc.PrimaryPart then
+                    targetPos = npc.PrimaryPart.Position
+                else
+                    local part = npc:FindFirstChildWhichIsA("BasePart")
+                    if part then targetPos = part.Position end
+                end
+            elseif npc:IsA("BasePart") then
+                targetPos = npc.Position
+            end
+            
+            if targetPos and Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
+                Player.Character.HumanoidRootPart.CFrame = CFrame.new(targetPos + Vector3.new(0, 3, 5))
+                task.wait(0.5)
+                
+                -- Cari prompt di dekat NPC
+                for _, prompt in pairs(npc:GetDescendants()) do
+                    if prompt:IsA("ProximityPrompt") then
                         pcall(function()
-                            -- Simulate click
-                            for _, conn in pairs(getconnections(obj.MouseButton1Click)) do
-                                conn:Fire()
+                            if fireproximityprompt then
+                                fireproximityprompt(prompt)
                             end
+                        end)
+                        success = true
+                        task.wait(0.3)
+                    end
+                end
+                
+                -- Cari ClickDetector
+                for _, click in pairs(npc:GetDescendants()) do
+                    if click:IsA("ClickDetector") then
+                        pcall(function()
+                            fireclickdetector(click)
                         end)
                         success = true
                         task.wait(0.3)
@@ -292,45 +496,23 @@ local function DoSell()
         end
     end
     
-    -- Method 4: Teleport ke NPC dan interact
-    if not success then
-        if TeleportToSellArea() then
-            print("💰 Teleported to sell area")
-            task.wait(1)
-            
-            -- Coba trigger ProximityPrompt terdekat
-            local sellPrompt2 = FindSellProximityPrompt()
-            if sellPrompt2 then
-                pcall(function()
-                    fireproximityprompt(sellPrompt2)
-                end)
-                success = true
-            end
-            
-            task.wait(0.5)
-        end
-    end
-    
-    -- Method 5: Fire semua remote yang ada "sell"
-    if not success then
-        print("💰 Trying all sell remotes...")
-        for _, remote in pairs(RS:GetDescendants()) do
-            if remote:IsA("RemoteEvent") and remote.Name:lower():find("sell") then
-                pcall(function()
-                    remote:FireServer()
-                    remote:FireServer("all")
-                end)
-                success = true
-            end
-        end
-    end
-    
+    -- ═══════════════════════════════════════════
+    -- RESULT
+    -- ═══════════════════════════════════════════
     if success then
         Stats.TotalSold = Stats.TotalSold + Stats.FishSinceLastSell
-        print(string.format("💰 SOLD! Total fish sold: %d", Stats.TotalSold))
+        print("💰 ═══════════════════════════════════")
+        print(string.format("💰 SELL COMPLETE! Total sold: %d", Stats.TotalSold))
+        print("💰 ═══════════════════════════════════")
         Stats.FishSinceLastSell = 0
     else
-        print("⚠️ Could not find sell method - please sell manually or check game")
+        print("⚠️ ═══════════════════════════════════")
+        print("⚠️ Could not find sell method!")
+        print("⚠️ Try these:")
+        print("⚠️ 1. Go to sell NPC manually first")
+        print("⚠️ 2. Check if shop GUI is open")
+        print("⚠️ ═══════════════════════════════════")
+        DebugRemotes()
     end
     
     IsSelling = false
@@ -346,14 +528,12 @@ local function CheckAndSell()
     if Stats.FishSinceLastSell >= Config.SellThreshold then
         print(string.format("💰 Reached %d fish! Auto selling...", Config.SellThreshold))
         
-        -- Stop fishing sementara
-        local wasEnabled = Config.Enabled
         IsFishing = false
         IsReeling = false
         
         task.wait(0.5)
         
-        DoSell()
+        SellAllFish()
         
         task.wait(1)
     end
@@ -462,7 +642,6 @@ local function StartSpamReel()
         IsReeling = false
         IsFishing = false
         
-        -- Check auto sell
         task.spawn(function()
             task.wait(0.5)
             CheckAndSell()
@@ -506,23 +685,39 @@ local function StopReelDetection()
 end
 
 -- ════════════════════════════════════════════════════════
--- TOGGLE FUNCTION
+-- TOGGLE FUNCTIONS
 -- ════════════════════════════════════════════════════════
-local ToggleButton, Glow, SellToggleButton
+local ToggleButton, Glow, SellToggleButton, MainToggle
 
 local function ToggleScript()
     Config.Enabled = not Config.Enabled
     
     if Config.Enabled then
-        ToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-        ToggleButton.Text = "⚡ STOP SPAM"
-        Glow.Color = Color3.fromRGB(0, 255, 0)
+        if ToggleButton then
+            ToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+            ToggleButton.Text = "⚡ STOP"
+        end
+        if MainToggle then
+            MainToggle.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+            MainToggle.Text = "⚡ STOP FISHING"
+        end
+        if Glow then
+            Glow.Color = Color3.fromRGB(0, 255, 0)
+        end
         StartReelDetection()
         print("✅ SPAM MODE ON!")
     else
-        ToggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-        ToggleButton.Text = "🔴 START SPAM"
-        Glow.Color = Color3.fromRGB(255, 0, 255)
+        if ToggleButton then
+            ToggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+            ToggleButton.Text = "🔴 START"
+        end
+        if MainToggle then
+            MainToggle.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+            MainToggle.Text = "🎣 START FISHING"
+        end
+        if Glow then
+            Glow.Color = Color3.fromRGB(255, 0, 255)
+        end
         StopReelDetection()
         StopSpamReel()
         IsFishing = false
@@ -533,14 +728,16 @@ end
 local function ToggleAutoSell()
     Config.AutoSell = not Config.AutoSell
     
-    if Config.AutoSell then
-        SellToggleButton.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
-        SellToggleButton.Text = "💰 Auto Sell: ON (5 Fish)"
-        print("✅ Auto Sell ON!")
-    else
-        SellToggleButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-        SellToggleButton.Text = "💰 Auto Sell: OFF"
-        print("❌ Auto Sell OFF!")
+    if SellToggleButton then
+        if Config.AutoSell then
+            SellToggleButton.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+            SellToggleButton.Text = string.format("💰 Auto Sell: ON (%d Fish)", Config.SellThreshold)
+            print("✅ Auto Sell ON!")
+        else
+            SellToggleButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+            SellToggleButton.Text = "💰 Auto Sell: OFF"
+            print("❌ Auto Sell OFF!")
+        end
     end
 end
 
@@ -580,8 +777,8 @@ Main.Name = "Main"
 Main.Parent = ScreenGui
 Main.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 Main.BorderSizePixel = 0
-Main.Position = UDim2.new(0.35, 0, 0.25, 0)
-Main.Size = UDim2.new(0, 320, 0, 290)
+Main.Position = UDim2.new(0.35, 0, 0.2, 0)
+Main.Size = UDim2.new(0, 320, 0, 320)
 Main.Active = true
 Main.Draggable = true
 
@@ -600,7 +797,7 @@ Title.BackgroundColor3 = Color3.fromRGB(150, 0, 255)
 Title.BorderSizePixel = 0
 Title.Size = UDim2.new(1, 0, 0, 50)
 Title.Font = Enum.Font.GothamBold
-Title.Text = "⚡ SPAM REEL + AUTO SELL"
+Title.Text = "🎣 FISCH AUTO + SELL ALL"
 Title.TextColor3 = Color3.new(1, 1, 1)
 Title.TextSize = 16
 
@@ -619,9 +816,9 @@ local StatsLabel = Instance.new("TextLabel")
 StatsLabel.Parent = Main
 StatsLabel.BackgroundTransparency = 1
 StatsLabel.Position = UDim2.new(0, 15, 0, 55)
-StatsLabel.Size = UDim2.new(1, -30, 0, 90)
+StatsLabel.Size = UDim2.new(1, -30, 0, 100)
 StatsLabel.Font = Enum.Font.Gotham
-StatsLabel.Text = "Ready to spam!"
+StatsLabel.Text = "Ready to fish!"
 StatsLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 StatsLabel.TextSize = 12
 StatsLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -630,27 +827,27 @@ StatsLabel.TextYAlignment = Enum.TextYAlignment.Top
 task.spawn(function()
     while task.wait(0.2) do
         pcall(function()
-            local status = Config.Enabled and "⚡ SPAM MODE!" or "🔴 STOPPED"
+            local status = Config.Enabled and "⚡ FISHING!" or "🔴 STOPPED"
             local currentAction = ""
             
             if Config.Enabled then
                 if IsSelling then
-                    currentAction = "💰💰💰 SELLING! 💰💰💰"
+                    currentAction = "💰💰 SELLING ALL FISH! 💰💰"
                 elseif IsReeling then
-                    currentAction = "⚡⚡⚡ SPAMMING! ⚡⚡⚡"
+                    currentAction = "⚡⚡ REELING! ⚡⚡"
                 elseif IsFishing then
-                    currentAction = "⏳ Waiting bite..."
+                    currentAction = "⏳ Waiting for bite..."
                 else
                     currentAction = "🎣 Casting..."
                 end
             end
             
             local sellStatus = Config.AutoSell and 
-                string.format("✅ ON [%d/%d]", Stats.FishSinceLastSell, Config.SellThreshold) or 
+                string.format("✅ ON [%d/%d fish]", Stats.FishSinceLastSell, Config.SellThreshold) or 
                 "❌ OFF"
             
             StatsLabel.Text = string.format(
-                "%s\n%s\n\n🐟 Fish: %d | 🎣 Casts: %d\n🖱️ Clicks: %d | 💰 Sold: %d\n📦 Auto Sell: %s",
+                "%s\n%s\n\n🐟 Fish Caught: %d\n🎣 Total Casts: %d | 🖱️ Clicks: %d\n💰 Total Sold: %d\n📦 Auto Sell: %s",
                 status,
                 currentAction,
                 Stats.Fish,
@@ -666,154 +863,132 @@ end)
 local SpeedLabel = Instance.new("TextLabel")
 SpeedLabel.Parent = Main
 SpeedLabel.BackgroundTransparency = 1
-SpeedLabel.Position = UDim2.new(0, 15, 0, 150)
+SpeedLabel.Position = UDim2.new(0, 15, 0, 160)
 SpeedLabel.Size = UDim2.new(1, -30, 0, 20)
 SpeedLabel.Font = Enum.Font.GothamBold
-SpeedLabel.Text = "⚡ Speed: ULTRA FAST"
+SpeedLabel.Text = "⚡ Click Speed: ULTRA FAST"
 SpeedLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
-SpeedLabel.TextSize = 12
+SpeedLabel.TextSize = 11
 SpeedLabel.TextXAlignment = Enum.TextXAlignment.Left
 
--- SELL TOGGLE BUTTON
+-- AUTO SELL TOGGLE
 SellToggleButton = Instance.new("TextButton")
 SellToggleButton.Parent = Main
 SellToggleButton.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
 SellToggleButton.BorderSizePixel = 0
-SellToggleButton.Position = UDim2.new(0, 15, 0, 175)
-SellToggleButton.Size = UDim2.new(1, -30, 0, 35)
+SellToggleButton.Position = UDim2.new(0, 15, 0, 185)
+SellToggleButton.Size = UDim2.new(1, -30, 0, 32)
 SellToggleButton.Font = Enum.Font.GothamBold
 SellToggleButton.Text = "💰 Auto Sell: ON (5 Fish)"
 SellToggleButton.TextColor3 = Color3.new(1, 1, 1)
-SellToggleButton.TextSize = 13
+SellToggleButton.TextSize = 12
 
 local SellButtonCorner = Instance.new("UICorner")
-SellButtonCorner.CornerRadius = UDim.new(0, 10)
+SellButtonCorner.CornerRadius = UDim.new(0, 8)
 SellButtonCorner.Parent = SellToggleButton
 
 SellToggleButton.MouseButton1Click:Connect(ToggleAutoSell)
 
--- MANUAL SELL BUTTON
-local ManualSellButton = Instance.new("TextButton")
-ManualSellButton.Parent = Main
-ManualSellButton.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
-ManualSellButton.BorderSizePixel = 0
-ManualSellButton.Position = UDim2.new(0, 15, 0, 215)
-ManualSellButton.Size = UDim2.new(0.45, -10, 0, 30)
-ManualSellButton.Font = Enum.Font.GothamBold
-ManualSellButton.Text = "💰 SELL NOW"
-ManualSellButton.TextColor3 = Color3.new(1, 1, 1)
-ManualSellButton.TextSize = 11
+-- SELL NOW BUTTON
+local SellNowButton = Instance.new("TextButton")
+SellNowButton.Parent = Main
+SellNowButton.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
+SellNowButton.BorderSizePixel = 0
+SellNowButton.Position = UDim2.new(0, 15, 0, 222)
+SellNowButton.Size = UDim2.new(0.5, -20, 0, 32)
+SellNowButton.Font = Enum.Font.GothamBold
+SellNowButton.Text = "💰 SELL ALL NOW"
+SellNowButton.TextColor3 = Color3.new(1, 1, 1)
+SellNowButton.TextSize = 11
 
-local ManualSellCorner = Instance.new("UICorner")
-ManualSellCorner.CornerRadius = UDim.new(0, 8)
-ManualSellCorner.Parent = ManualSellButton
+local SellNowCorner = Instance.new("UICorner")
+SellNowCorner.CornerRadius = UDim.new(0, 8)
+SellNowCorner.Parent = SellNowButton
 
-ManualSellButton.MouseButton1Click:Connect(function()
+SellNowButton.MouseButton1Click:Connect(function()
     if not IsSelling then
         task.spawn(function()
-            DoSell()
+            SellAllFish()
         end)
     end
 end)
 
--- START/STOP BUTTON
-ToggleButton = Instance.new("TextButton")
-ToggleButton.Parent = Main
-ToggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-ToggleButton.BorderSizePixel = 0
-ToggleButton.Position = UDim2.new(0.5, 5, 0, 215)
-ToggleButton.Size = UDim2.new(0.5, -20, 0, 30)
-ToggleButton.Font = Enum.Font.GothamBold
-ToggleButton.Text = "🔴 START"
-ToggleButton.TextColor3 = Color3.new(1, 1, 1)
-ToggleButton.TextSize = 11
+-- DEBUG BUTTON
+local DebugButton = Instance.new("TextButton")
+DebugButton.Parent = Main
+DebugButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+DebugButton.BorderSizePixel = 0
+DebugButton.Position = UDim2.new(0.5, 5, 0, 222)
+DebugButton.Size = UDim2.new(0.5, -20, 0, 32)
+DebugButton.Font = Enum.Font.GothamBold
+DebugButton.Text = "🔍 DEBUG"
+DebugButton.TextColor3 = Color3.new(1, 1, 1)
+DebugButton.TextSize = 11
 
-local ButtonCorner = Instance.new("UICorner")
-ButtonCorner.CornerRadius = UDim.new(0, 8)
-ButtonCorner.Parent = ToggleButton
+local DebugCorner = Instance.new("UICorner")
+DebugCorner.CornerRadius = UDim.new(0, 8)
+DebugCorner.Parent = DebugButton
 
-ToggleButton.MouseButton1Click:Connect(ToggleScript)
+DebugButton.MouseButton1Click:Connect(function()
+    DebugRemotes()
+end)
 
--- MAIN TOGGLE BUTTON (BESAR)
-local MainToggle = Instance.new("TextButton")
+-- MAIN START/STOP BUTTON
+MainToggle = Instance.new("TextButton")
 MainToggle.Parent = Main
 MainToggle.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
 MainToggle.BorderSizePixel = 0
-MainToggle.Position = UDim2.new(0, 15, 0, 250)
-MainToggle.Size = UDim2.new(1, -30, 0, 30)
+MainToggle.Position = UDim2.new(0, 15, 0, 260)
+MainToggle.Size = UDim2.new(1, -30, 0, 45)
 MainToggle.Font = Enum.Font.GothamBold
 MainToggle.Text = "🎣 START FISHING"
 MainToggle.TextColor3 = Color3.new(1, 1, 1)
-MainToggle.TextSize = 13
+MainToggle.TextSize = 16
 
 local MainToggleCorner = Instance.new("UICorner")
-MainToggleCorner.CornerRadius = UDim.new(0, 8)
+MainToggleCorner.CornerRadius = UDim.new(0, 10)
 MainToggleCorner.Parent = MainToggle
 
-MainToggle.MouseButton1Click:Connect(function()
-    ToggleScript()
-    if Config.Enabled then
-        MainToggle.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-        MainToggle.Text = "⚡ STOP FISHING"
-        ToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-        ToggleButton.Text = "⚡ STOP"
-    else
-        MainToggle.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-        MainToggle.Text = "🎣 START FISHING"
-        ToggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-        ToggleButton.Text = "🔴 START"
-    end
-end)
+MainToggle.MouseButton1Click:Connect(ToggleScript)
+
+ToggleButton = MainToggle
 
 -- ════════════════════════════════════════════════════════
 -- KEYBINDS
 -- ════════════════════════════════════════════════════════
 UIS.InputBegan:Connect(function(input, processed)
     if processed then return end
+    
     if input.KeyCode == Enum.KeyCode.Delete then
         Main.Visible = not Main.Visible
         print("GUI Toggled:", Main.Visible)
     elseif input.KeyCode == Enum.KeyCode.F6 then
         ToggleScript()
-        if Config.Enabled then
-            MainToggle.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-            MainToggle.Text = "⚡ STOP FISHING"
-            ToggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-            ToggleButton.Text = "⚡ STOP"
-        else
-            MainToggle.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-            MainToggle.Text = "🎣 START FISHING"
-            ToggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-            ToggleButton.Text = "🔴 START"
-        end
     elseif input.KeyCode == Enum.KeyCode.F7 then
         ToggleAutoSell()
     elseif input.KeyCode == Enum.KeyCode.F8 then
         if not IsSelling then
             task.spawn(function()
-                DoSell()
+                SellAllFish()
             end)
         end
     end
 end)
 
 print("════════════════════════════════════════")
-print("✅ GUI CREATED!")
-print("✅ SPAM REEL + AUTO SELL LOADED!")
+print("✅ FISCH AUTO + SELL ALL LOADED!")
 print("════════════════════════════════════════")
-print("🎮 Controls:")
+print("🎮 KEYBINDS:")
 print("  DELETE = Hide/Show GUI")
-print("  F6 = Toggle Fishing ON/OFF")
-print("  F7 = Toggle Auto Sell ON/OFF")
-print("  F8 = Manual Sell Now")
+print("  F6 = Start/Stop Fishing")
+print("  F7 = Toggle Auto Sell")
+print("  F8 = Sell All Fish NOW")
 print("════════════════════════════════════════")
-print("⚡ CLICK START BUTTON TO BEGIN!")
-print("💰 Auto Sell after 5 fish!")
+print("💰 Auto sells ALL fish after 5 catches!")
+print("🔍 Use DEBUG button to see remotes")
 print("════════════════════════════════════════")
 
 task.wait(1)
 if Main.Visible then
-    print("✅ GUI is visible on screen!")
-else
-    warn("⚠️ GUI might be hidden!")
+    print("✅ GUI is visible!")
 end
