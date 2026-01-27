@@ -1,20 +1,10 @@
 --[[
     ════════════════════════════════════════════════════════
-    🎣 FISCH AUTO - BLATAN V1
-    ════════════════════════════════════════════════════════
-    Features:
-    ✅ Auto Fish + Auto Reel
-    ✅ Auto Sell (5 Fish)
-    ✅ Delay Reels (Adjustable)
-    ✅ Delay Fishing (Adjustable)
-    ✅ Save Position (Auto Teleport)
-    ✅ Hide Animation (No Fishing Animation)
-    ✅ Minimize GUI
-    ✅ Auto Recovery
+    🎣 FISCH AUTO - BLATAN V1 (CLEAN GUI)
     ════════════════════════════════════════════════════════
 ]]
 
-print("🎣 LOADING FISCH AUTO - BLATAN V1...")
+print("🎣 LOADING BLATAN V1...")
 
 repeat task.wait() until game:IsLoaded()
 task.wait(2)
@@ -27,65 +17,35 @@ local RS = game:GetService("ReplicatedStorage")
 local UIS = game:GetService("UserInputService")
 local VIM = game:GetService("VirtualInputManager")
 local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
 
 local Player = Players.LocalPlayer
 local PlayerGui = Player:WaitForChild("PlayerGui")
 local Backpack = Player:WaitForChild("Backpack")
 
 -- ════════════════════════════════════════════════════════
--- CONFIG (BLATAN V1)
+-- CONFIG
 -- ════════════════════════════════════════════════════════
 local Config = {
-    -- Main
     Enabled = false,
     AutoSell = true,
     SellThreshold = 5,
-    
-    -- BLATAN V1 Features
-    DelayReels = 0.03,      -- Delay antara click saat reel (0.01 - 0.5)
-    DelayFishing = 1.5,     -- Delay antara cast (0.5 - 5)
-    
-    -- Position
-    SavedPosition = nil,    -- Posisi yang disimpan
-    AutoTeleport = false,   -- Auto teleport ke posisi
-    
-    -- Animation
-    HideAnimation = false,  -- Sembunyikan animasi mancing
+    DelayReels = 0.03,
+    DelayFishing = 0.5,
+    SavedPosition = nil,
+    AutoTeleport = false,
+    HideAnimation = false,
 }
 
-local Stats = {
-    Fish = 0,
-    FishSinceLastSell = 0,
-    Casts = 0,
-    Clicks = 0,
-    TotalSold = 0,
-}
+local Stats = { Fish = 0, FishSinceLastSell = 0, Casts = 0, TotalSold = 0 }
+local IsFishing, IsReeling, IsSelling, LastCast = false, false, false, 0
 
 -- ════════════════════════════════════════════════════════
--- STATE
--- ════════════════════════════════════════════════════════
-local IsFishing = false
-local IsReeling = false
-local IsSelling = false
-local LastCast = 0
-local IsMinimized = false
-local OriginalAnimations = {}
-
--- ════════════════════════════════════════════════════════
--- RESET STATE
+-- CORE FUNCTIONS
 -- ════════════════════════════════════════════════════════
 local function ResetState()
-    IsFishing = false
-    IsReeling = false
-    IsSelling = false
-    LastCast = 0
-    print("🔄 State reset!")
+    IsFishing, IsReeling, IsSelling, LastCast = false, false, false, 0
 end
 
--- ════════════════════════════════════════════════════════
--- ANTI-AFK
--- ════════════════════════════════════════════════════════
 Player.Idled:Connect(function()
     pcall(function()
         game:GetService("VirtualUser"):CaptureController()
@@ -93,302 +53,133 @@ Player.Idled:Connect(function()
     end)
 end)
 
--- ════════════════════════════════════════════════════════
--- HIDE ANIMATION SYSTEM
--- ════════════════════════════════════════════════════════
-local function GetAnimator()
-    if Player.Character then
-        local humanoid = Player.Character:FindFirstChild("Humanoid")
-        if humanoid then
-            return humanoid:FindFirstChild("Animator")
-        end
-    end
-    return nil
-end
-
-local function HideFishingAnimation()
-    if not Config.HideAnimation then return end
-    
-    pcall(function()
-        local animator = GetAnimator()
-        if animator then
-            for _, track in pairs(animator:GetPlayingAnimationTracks()) do
-                local name = track.Name:lower()
-                if name:find("fish") or name:find("cast") or name:find("reel") or name:find("rod") then
-                    track:Stop()
-                    track:AdjustSpeed(0)
-                end
-            end
-        end
-        
-        -- Hide rod mesh
-        if Player.Character then
-            for _, tool in pairs(Player.Character:GetChildren()) do
-                if tool:IsA("Tool") and tool.Name:lower():find("rod") then
-                    for _, part in pairs(tool:GetDescendants()) do
-                        if part:IsA("BasePart") then
-                            part.Transparency = 1
-                        end
-                    end
-                end
-            end
-        end
-    end)
-end
-
-local function ShowFishingAnimation()
-    pcall(function()
-        -- Show rod mesh
-        if Player.Character then
-            for _, tool in pairs(Player.Character:GetChildren()) do
-                if tool:IsA("Tool") and tool.Name:lower():find("rod") then
-                    for _, part in pairs(tool:GetDescendants()) do
-                        if part:IsA("BasePart") then
-                            part.Transparency = 0
-                        end
-                    end
-                end
-            end
-        end
-    end)
-end
-
--- Animation hide loop
-task.spawn(function()
-    while true do
-        task.wait(0.1)
-        if Config.Enabled and Config.HideAnimation then
-            HideFishingAnimation()
-        end
-    end
-end)
-
--- ════════════════════════════════════════════════════════
--- POSITION SYSTEM
--- ════════════════════════════════════════════════════════
-local function SavePosition()
-    if Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
-        Config.SavedPosition = Player.Character.HumanoidRootPart.CFrame
-        print("📍 Position saved!")
-        return true
-    end
-    return false
-end
-
-local function TeleportToSavedPosition()
-    if Config.SavedPosition and Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
-        Player.Character.HumanoidRootPart.CFrame = Config.SavedPosition
-        print("📍 Teleported to saved position!")
-        return true
-    end
-    return false
-end
-
-local function ClearPosition()
-    Config.SavedPosition = nil
-    Config.AutoTeleport = false
-    print("📍 Position cleared!")
-end
-
--- Auto teleport loop
-task.spawn(function()
-    while true do
-        task.wait(1)
-        if Config.Enabled and Config.AutoTeleport and Config.SavedPosition then
-            if Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
-                local currentPos = Player.Character.HumanoidRootPart.Position
-                local savedPos = Config.SavedPosition.Position
-                local distance = (currentPos - savedPos).Magnitude
-                
-                if distance > 10 then
-                    TeleportToSavedPosition()
-                end
-            end
-        end
-    end
-end)
-
--- ════════════════════════════════════════════════════════
--- ROD FUNCTIONS
--- ════════════════════════════════════════════════════════
 local function GetRod()
     if Player.Character then
-        for _, tool in pairs(Player.Character:GetChildren()) do
-            if tool:IsA("Tool") and tool.Name:lower():find("rod") then
-                return tool
-            end
+        for _, t in pairs(Player.Character:GetChildren()) do
+            if t:IsA("Tool") and t.Name:lower():find("rod") then return t end
         end
     end
-    
-    for _, tool in pairs(Backpack:GetChildren()) do
-        if tool:IsA("Tool") and tool.Name:lower():find("rod") then
-            return tool
-        end
+    for _, t in pairs(Backpack:GetChildren()) do
+        if t:IsA("Tool") and t.Name:lower():find("rod") then return t end
     end
 end
 
 local function EquipRod()
     local rod = GetRod()
-    if rod and rod.Parent == Backpack then
-        if Player.Character and Player.Character:FindFirstChild("Humanoid") then
-            Player.Character.Humanoid:EquipTool(rod)
-            task.wait(0.3)
-            return true
+    if rod and rod.Parent == Backpack and Player.Character then
+        Player.Character.Humanoid:EquipTool(rod)
+        task.wait(0.2)
+    end
+end
+
+local function SavePosition()
+    if Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
+        Config.SavedPosition = Player.Character.HumanoidRootPart.CFrame
+        return true
+    end
+end
+
+local function TeleportToSaved()
+    if Config.SavedPosition and Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
+        Player.Character.HumanoidRootPart.CFrame = Config.SavedPosition
+    end
+end
+
+-- Hide Animation
+task.spawn(function()
+    while true do
+        task.wait(0.1)
+        if Config.Enabled and Config.HideAnimation and Player.Character then
+            pcall(function()
+                local hum = Player.Character:FindFirstChild("Humanoid")
+                if hum then
+                    local animator = hum:FindFirstChild("Animator")
+                    if animator then
+                        for _, track in pairs(animator:GetPlayingAnimationTracks()) do
+                            if track.Name:lower():find("fish") or track.Name:lower():find("rod") then
+                                track:Stop()
+                            end
+                        end
+                    end
+                end
+            end)
         end
     end
-    return rod ~= nil
-end
+end)
+
+-- Auto Teleport
+task.spawn(function()
+    while true do
+        task.wait(1)
+        if Config.Enabled and Config.AutoTeleport and Config.SavedPosition then
+            pcall(function()
+                if Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
+                    local dist = (Player.Character.HumanoidRootPart.Position - Config.SavedPosition.Position).Magnitude
+                    if dist > 10 then TeleportToSaved() end
+                end
+            end)
+        end
+    end
+end)
 
 -- ════════════════════════════════════════════════════════
 -- SELL SYSTEM
 -- ════════════════════════════════════════════════════════
-local function GetNetworkFolder()
-    local possiblePaths = {
-        RS:FindFirstChild("Network"),
-        RS:FindFirstChild("Remotes"),
-        RS:FindFirstChild("Events"),
-    }
-    
-    for _, folder in pairs(possiblePaths) do
-        if folder then return folder end
-    end
-    return RS
-end
-
-local function FindAllSellRemotes()
-    local sellRemotes = {}
-    local keywords = {"sell", "shop", "vendor"}
-    
-    for _, obj in pairs(RS:GetDescendants()) do
-        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
-            local name = obj.Name:lower()
-            for _, keyword in pairs(keywords) do
-                if name:find(keyword) then
-                    table.insert(sellRemotes, obj)
-                    break
-                end
-            end
-        end
-    end
-    return sellRemotes
-end
-
 local function SellAllFish()
-    if IsSelling then return false end
+    if IsSelling then return end
     IsSelling = true
     
-    print("💰 SELLING ALL FISH...")
-    
-    local success = false
-    local remoteNames = {
-        "SellFish", "SellAllFish", "Sell", "SellAll",
-        "sellfish", "sellall", "QuickSell",
-    }
-    
-    for _, remoteName in pairs(remoteNames) do
-        local remote = RS:FindFirstChild(remoteName, true)
-        if remote then
+    for _, name in pairs({"SellFish", "SellAllFish", "Sell", "SellAll"}) do
+        local r = RS:FindFirstChild(name, true)
+        if r then
             pcall(function()
-                if remote:IsA("RemoteEvent") then
-                    remote:FireServer()
-                    remote:FireServer("All")
-                    remote:FireServer(true)
-                else
-                    remote:InvokeServer()
-                    remote:InvokeServer("All")
-                end
+                if r:IsA("RemoteEvent") then r:FireServer() r:FireServer("All") r:FireServer(true)
+                else r:InvokeServer() end
             end)
-            success = true
             task.wait(0.1)
         end
     end
     
-    local allSellRemotes = FindAllSellRemotes()
-    for _, remote in pairs(allSellRemotes) do
-        pcall(function()
-            if remote:IsA("RemoteEvent") then
-                remote:FireServer()
-                remote:FireServer("All")
-            end
-        end)
-        success = true
-        task.wait(0.1)
-    end
-    
-    -- ProximityPrompt sell
     for _, obj in pairs(workspace:GetDescendants()) do
-        if obj:IsA("ProximityPrompt") then
-            local name = obj.Name:lower()
-            local parentName = obj.Parent and obj.Parent.Name:lower() or ""
-            local actionText = obj.ActionText and obj.ActionText:lower() or ""
-            
-            if name:find("sell") or parentName:find("sell") or actionText:find("sell") then
-                if obj.Parent and obj.Parent:IsA("BasePart") then
-                    if Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
-                        Player.Character.HumanoidRootPart.CFrame = CFrame.new(obj.Parent.Position + Vector3.new(0, 3, 3))
-                        task.wait(0.5)
-                    end
+        if obj:IsA("ProximityPrompt") and (obj.Name:lower():find("sell") or (obj.ActionText and obj.ActionText:lower():find("sell"))) then
+            pcall(function()
+                if obj.Parent:IsA("BasePart") and Player.Character then
+                    Player.Character.HumanoidRootPart.CFrame = CFrame.new(obj.Parent.Position + Vector3.new(0,3,3))
+                    task.wait(0.3)
+                    if fireproximityprompt then fireproximityprompt(obj) end
                 end
-                pcall(function()
-                    if fireproximityprompt then
-                        fireproximityprompt(obj)
-                    end
-                end)
-                success = true
-                task.wait(0.5)
-            end
+            end)
+            task.wait(0.3)
         end
     end
     
-    if success then
-        Stats.TotalSold = Stats.TotalSold + Stats.FishSinceLastSell
-        print(string.format("💰 SOLD %d fish! Total: %d", Stats.FishSinceLastSell, Stats.TotalSold))
-        Stats.FishSinceLastSell = 0
-    end
+    Stats.TotalSold = Stats.TotalSold + Stats.FishSinceLastSell
+    Stats.FishSinceLastSell = 0
     
     task.wait(0.5)
+    if Config.SavedPosition then TeleportToSaved() end
+    task.wait(0.3)
     
-    -- Teleport back to saved position
-    if Config.SavedPosition then
-        TeleportToSavedPosition()
-        task.wait(0.3)
-    end
-    
-    IsSelling = false
-    IsFishing = false
-    IsReeling = false
-    LastCast = 0
-    
+    IsSelling, IsFishing, IsReeling, LastCast = false, false, false, 0
     EquipRod()
-    
-    return success
 end
 
 local function CheckAndSell()
-    if not Config.AutoSell then return end
-    if IsSelling then return end
-    
-    if Stats.FishSinceLastSell >= Config.SellThreshold then
-        print(string.format("💰 %d fish! Selling...", Config.SellThreshold))
-        IsFishing = false
-        IsReeling = false
-        task.wait(0.3)
+    if Config.AutoSell and Stats.FishSinceLastSell >= Config.SellThreshold then
         SellAllFish()
     end
 end
 
 -- ════════════════════════════════════════════════════════
--- UI DETECTION
+-- FISHING SYSTEM
 -- ════════════════════════════════════════════════════════
 local function HasReelUI()
     for _, gui in pairs(PlayerGui:GetChildren()) do
-        if gui:IsA("ScreenGui") and gui.Enabled and gui.Name ~= "FischBlatanGUI" then
+        if gui:IsA("ScreenGui") and gui.Enabled and gui.Name ~= "BlatanV1" then
             for _, obj in pairs(gui:GetDescendants()) do
                 if obj:IsA("GuiObject") and obj.Visible then
-                    local name = obj.Name:lower()
-                    if name == "reel" or name == "safezone" or name == "bar" or 
-                       name == "reelbar" or name == "fishingbar" or name == "progress" or
-                       name == "playerbar" or name:find("reel") or name:find("safe") then
+                    local n = obj.Name:lower()
+                    if n:find("reel") or n:find("safe") or n == "bar" or n == "progress" then
                         return true
                     end
                 end
@@ -398,102 +189,65 @@ local function HasReelUI()
     return false
 end
 
--- ════════════════════════════════════════════════════════
--- CAST (With Delay Fishing)
--- ════════════════════════════════════════════════════════
 local function DoCast()
-    if IsFishing or IsReeling or IsSelling then return end
-    if tick() - LastCast < Config.DelayFishing then return end
-    
-    Stats.Casts = Stats.Casts + 1
-    print("🎣 Cast #" .. Stats.Casts)
+    if IsFishing or IsReeling or IsSelling or tick() - LastCast < Config.DelayFishing then return end
     
     EquipRod()
-    
     local rod = GetRod()
     if rod then rod:Activate() end
     
-    VIM:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+    VIM:SendMouseButtonEvent(0,0,0,true,game,0)
     task.wait(0.05)
-    VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+    VIM:SendMouseButtonEvent(0,0,0,false,game,0)
     
-    IsFishing = true
-    LastCast = tick()
+    IsFishing, LastCast = true, tick()
+    Stats.Casts = Stats.Casts + 1
     
     task.delay(20, function()
-        if IsFishing and not IsReeling and not IsSelling then 
-            IsFishing = false 
-            LastCast = 0
-        end
+        if IsFishing and not IsReeling then IsFishing, LastCast = false, 0 end
     end)
 end
 
--- ════════════════════════════════════════════════════════
--- SPAM REEL (With Delay Reels)
--- ════════════════════════════════════════════════════════
-local function StartSpamReel()
+local function StartReel()
     if IsReeling then return end
     IsReeling = true
     
-    local startTime = tick()
-    local clickCount = 0
-    
     task.spawn(function()
+        local start = tick()
         while IsReeling and Config.Enabled and not IsSelling do
             if not HasReelUI() then break end
-            
-            VIM:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+            VIM:SendMouseButtonEvent(0,0,0,true,game,0)
             task.wait(0.01)
-            VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-            
-            clickCount = clickCount + 1
-            Stats.Clicks = Stats.Clicks + 1
-            
-            task.wait(Config.DelayReels)  -- DELAY REELS
-            
-            if tick() - startTime > 30 then break end
+            VIM:SendMouseButtonEvent(0,0,0,false,game,0)
+            task.wait(Config.DelayReels)
+            if tick() - start > 30 then break end
         end
         
         Stats.Fish = Stats.Fish + 1
         Stats.FishSinceLastSell = Stats.FishSinceLastSell + 1
-        print(string.format("✅ Fish #%d! [%d/%d]", Stats.Fish, Stats.FishSinceLastSell, Config.SellThreshold))
+        IsReeling, IsFishing, LastCast = false, false, 0
         
-        IsReeling = false
-        IsFishing = false
-        LastCast = 0
-        
-        task.wait(0.3)
-        if Config.Enabled and not IsSelling then
-            CheckAndSell()
+        task.wait(0.2)
+        CheckAndSell()
+    end)
+end
+
+-- Detection
+local Detection = nil
+local function StartDetection()
+    if Detection then return end
+    Detection = RunService.RenderStepped:Connect(function()
+        if Config.Enabled and IsFishing and not IsReeling and not IsSelling and HasReelUI() then
+            StartReel()
         end
     end)
 end
 
--- ════════════════════════════════════════════════════════
--- DETECTION
--- ════════════════════════════════════════════════════════
-local ReelDetection = nil
-
-local function StartReelDetection()
-    if ReelDetection then return end
-    
-    ReelDetection = RunService.RenderStepped:Connect(function()
-        if Config.Enabled and IsFishing and not IsReeling and not IsSelling then
-            if HasReelUI() then StartSpamReel() end
-        end
-    end)
+local function StopDetection()
+    if Detection then Detection:Disconnect() Detection = nil end
 end
 
-local function StopReelDetection()
-    if ReelDetection then
-        ReelDetection:Disconnect()
-        ReelDetection = nil
-    end
-end
-
--- ════════════════════════════════════════════════════════
--- MAIN LOOP
--- ════════════════════════════════════════════════════════
+-- Main Loop
 task.spawn(function()
     while true do
         task.wait(0.2)
@@ -507,437 +261,395 @@ end)
 task.spawn(function()
     while true do
         task.wait(5)
-        if Config.Enabled and not IsSelling and IsFishing and not IsReeling then
-            if tick() - LastCast > 15 then
-                print("⚠️ Stuck! Resetting...")
-                ResetState()
-            end
+        if Config.Enabled and IsFishing and not IsReeling and tick() - LastCast > 15 then
+            ResetState()
         end
     end
 end)
 
 -- ════════════════════════════════════════════════════════
--- GUI REFERENCES
+-- CLEAN GUI
 -- ════════════════════════════════════════════════════════
-local Main, ContentFrame, Glow, MainToggle
-local SellToggleBtn, HideAnimBtn, AutoTPBtn
-local DelayReelsSlider, DelayFishingSlider
-local SavePosBtn, TeleportBtn, ClearPosBtn
+local GUI = Instance.new("ScreenGui")
+GUI.Name = "BlatanV1"
+GUI.ResetOnSpawn = false
+GUI.Parent = PlayerGui
 
--- ════════════════════════════════════════════════════════
--- TOGGLE FUNCTIONS
--- ════════════════════════════════════════════════════════
-local function UpdateMainButton()
-    if not MainToggle then return end
-    if Config.Enabled then
-        MainToggle.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-        MainToggle.Text = "⚡ STOP"
-        if Glow then Glow.Color = Color3.fromRGB(0, 255, 0) end
-    else
-        MainToggle.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-        MainToggle.Text = "🎣 START"
-        if Glow then Glow.Color = Color3.fromRGB(255, 0, 255) end
-    end
-end
-
-local function ToggleScript()
-    Config.Enabled = not Config.Enabled
-    if Config.Enabled then
-        ResetState()
-        StartReelDetection()
-        if Config.SavedPosition then TeleportToSavedPosition() end
-        print("✅ STARTED!")
-    else
-        StopReelDetection()
-        ResetState()
-        if not Config.HideAnimation then ShowFishingAnimation() end
-        print("❌ STOPPED!")
-    end
-    UpdateMainButton()
-end
-
-local function ToggleAutoSell()
-    Config.AutoSell = not Config.AutoSell
-    if SellToggleBtn then
-        SellToggleBtn.BackgroundColor3 = Config.AutoSell and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(80, 80, 80)
-        SellToggleBtn.Text = Config.AutoSell and "💰 Auto Sell: ON" or "💰 Auto Sell: OFF"
-    end
-end
-
-local function ToggleHideAnimation()
-    Config.HideAnimation = not Config.HideAnimation
-    if HideAnimBtn then
-        HideAnimBtn.BackgroundColor3 = Config.HideAnimation and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(80, 80, 80)
-        HideAnimBtn.Text = Config.HideAnimation and "👻 Hide Anim: ON" or "👻 Hide Anim: OFF"
-    end
-    if not Config.HideAnimation then ShowFishingAnimation() end
-end
-
-local function ToggleAutoTeleport()
-    Config.AutoTeleport = not Config.AutoTeleport
-    if AutoTPBtn then
-        AutoTPBtn.BackgroundColor3 = Config.AutoTeleport and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(80, 80, 80)
-        AutoTPBtn.Text = Config.AutoTeleport and "📍 Auto TP: ON" or "📍 Auto TP: OFF"
-    end
-end
-
-local function ToggleMinimize()
-    IsMinimized = not IsMinimized
-    if IsMinimized then
-        ContentFrame.Visible = false
-        Main.Size = UDim2.new(0, 220, 0, 45)
-    else
-        ContentFrame.Visible = true
-        Main.Size = UDim2.new(0, 320, 0, 420)
-    end
-end
-
--- ════════════════════════════════════════════════════════
--- GUI BUILDER
--- ════════════════════════════════════════════════════════
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "FischBlatanGUI"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-ScreenGui.Parent = PlayerGui
-
--- MAIN FRAME
-Main = Instance.new("Frame")
-Main.Name = "Main"
-Main.Parent = ScreenGui
-Main.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+-- Main Frame
+local Main = Instance.new("Frame")
+Main.Parent = GUI
+Main.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
 Main.BorderSizePixel = 0
-Main.Position = UDim2.new(0, 10, 0.5, -210)
-Main.Size = UDim2.new(0, 320, 0, 420)
+Main.Position = UDim2.new(0, 10, 0.3, 0)
+Main.Size = UDim2.new(0, 180, 0, 245)
 Main.Active = true
 Main.Draggable = true
 
-local Corner = Instance.new("UICorner")
-Corner.CornerRadius = UDim.new(0, 12)
-Corner.Parent = Main
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 8)
+MainCorner.Parent = Main
 
-Glow = Instance.new("UIStroke")
-Glow.Color = Color3.fromRGB(255, 0, 255)
-Glow.Thickness = 2
-Glow.Parent = Main
+local Stroke = Instance.new("UIStroke")
+Stroke.Color = Color3.fromRGB(80, 80, 100)
+Stroke.Thickness = 1
+Stroke.Parent = Main
 
--- TITLE BAR
-local TitleBar = Instance.new("Frame")
-TitleBar.Parent = Main
-TitleBar.BackgroundColor3 = Color3.fromRGB(100, 0, 200)
-TitleBar.Size = UDim2.new(1, 0, 0, 45)
+-- Title
+local Title = Instance.new("TextLabel")
+Title.Parent = Main
+Title.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
+Title.Size = UDim2.new(1, 0, 0, 28)
+Title.Font = Enum.Font.GothamBold
+Title.Text = "Blatant V1 Features"
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.TextSize = 11
 
 local TitleCorner = Instance.new("UICorner")
-TitleCorner.CornerRadius = UDim.new(0, 12)
-TitleCorner.Parent = TitleBar
+TitleCorner.CornerRadius = UDim.new(0, 8)
+TitleCorner.Parent = Title
 
-local TitleFix = Instance.new("Frame")
-TitleFix.Parent = TitleBar
-TitleFix.BackgroundColor3 = Color3.fromRGB(100, 0, 200)
-TitleFix.BorderSizePixel = 0
-TitleFix.Position = UDim2.new(0, 0, 0.5, 0)
-TitleFix.Size = UDim2.new(1, 0, 0.5, 0)
+-- Toggle Button (Automatically)
+local AutoBtn = Instance.new("TextButton")
+AutoBtn.Parent = Main
+AutoBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+AutoBtn.Position = UDim2.new(0, 8, 0, 35)
+AutoBtn.Size = UDim2.new(1, -16, 0, 24)
+AutoBtn.Font = Enum.Font.Gotham
+AutoBtn.Text = "Automatically"
+AutoBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+AutoBtn.TextSize = 10
 
-local TitleText = Instance.new("TextLabel")
-TitleText.Parent = TitleBar
-TitleText.BackgroundTransparency = 1
-TitleText.Position = UDim2.new(0, 12, 0, 0)
-TitleText.Size = UDim2.new(1, -80, 1, 0)
-TitleText.Font = Enum.Font.GothamBold
-TitleText.Text = "🎣 BLATAN V1"
-TitleText.TextColor3 = Color3.new(1, 1, 1)
-TitleText.TextSize = 16
-TitleText.TextXAlignment = Enum.TextXAlignment.Left
+local AutoCorner = Instance.new("UICorner")
+AutoCorner.CornerRadius = UDim.new(0, 6)
+AutoCorner.Parent = AutoBtn
 
--- MINIMIZE BUTTON
-local MinBtn = Instance.new("TextButton")
-MinBtn.Parent = TitleBar
-MinBtn.BackgroundColor3 = Color3.fromRGB(70, 0, 150)
-MinBtn.Position = UDim2.new(1, -40, 0, 7)
-MinBtn.Size = UDim2.new(0, 32, 0, 32)
-MinBtn.Font = Enum.Font.GothamBold
-MinBtn.Text = "−"
-MinBtn.TextColor3 = Color3.new(1, 1, 1)
-MinBtn.TextSize = 20
+-- Delay Reel Section
+local ReelLabel = Instance.new("TextLabel")
+ReelLabel.Parent = Main
+ReelLabel.BackgroundTransparency = 1
+ReelLabel.Position = UDim2.new(0, 10, 0, 65)
+ReelLabel.Size = UDim2.new(0.5, -10, 0, 16)
+ReelLabel.Font = Enum.Font.Gotham
+ReelLabel.Text = "Delay Reel"
+ReelLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+ReelLabel.TextSize = 10
+ReelLabel.TextXAlignment = Enum.TextXAlignment.Left
 
-local MinBtnCorner = Instance.new("UICorner")
-MinBtnCorner.CornerRadius = UDim.new(0, 8)
-MinBtnCorner.Parent = MinBtn
+local ReelValue = Instance.new("TextLabel")
+ReelValue.Parent = Main
+ReelValue.BackgroundTransparency = 1
+ReelValue.Position = UDim2.new(0.5, 0, 0, 65)
+ReelValue.Size = UDim2.new(0.5, -10, 0, 16)
+ReelValue.Font = Enum.Font.GothamBold
+ReelValue.Text = string.format("%.2f", Config.DelayReels)
+ReelValue.TextColor3 = Color3.new(1, 1, 1)
+ReelValue.TextSize = 10
+ReelValue.TextXAlignment = Enum.TextXAlignment.Right
 
-MinBtn.MouseButton1Click:Connect(ToggleMinimize)
+local ReelSliderBg = Instance.new("Frame")
+ReelSliderBg.Parent = Main
+ReelSliderBg.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+ReelSliderBg.Position = UDim2.new(0, 10, 0, 83)
+ReelSliderBg.Size = UDim2.new(1, -20, 0, 6)
 
--- MINI STATUS (When minimized)
-local MiniStatus = Instance.new("TextLabel")
-MiniStatus.Parent = TitleBar
-MiniStatus.BackgroundTransparency = 1
-MiniStatus.Position = UDim2.new(0, 100, 0, 0)
-MiniStatus.Size = UDim2.new(1, -150, 1, 0)
-MiniStatus.Font = Enum.Font.Gotham
-MiniStatus.Text = ""
-MiniStatus.TextColor3 = Color3.fromRGB(200, 200, 200)
-MiniStatus.TextSize = 10
-MiniStatus.TextXAlignment = Enum.TextXAlignment.Right
+local ReelSliderCorner = Instance.new("UICorner")
+ReelSliderCorner.CornerRadius = UDim.new(0, 3)
+ReelSliderCorner.Parent = ReelSliderBg
 
--- CONTENT FRAME
-ContentFrame = Instance.new("ScrollingFrame")
-ContentFrame.Name = "Content"
-ContentFrame.Parent = Main
-ContentFrame.BackgroundTransparency = 1
-ContentFrame.Position = UDim2.new(0, 0, 0, 50)
-ContentFrame.Size = UDim2.new(1, 0, 1, -50)
-ContentFrame.ScrollBarThickness = 4
-ContentFrame.CanvasSize = UDim2.new(0, 0, 0, 380)
+local ReelSliderFill = Instance.new("Frame")
+ReelSliderFill.Parent = ReelSliderBg
+ReelSliderFill.BackgroundColor3 = Color3.fromRGB(100, 100, 255)
+ReelSliderFill.Size = UDim2.new(Config.DelayReels / 0.5, 0, 1, 0)
 
--- HELPER: Create Button
-local function CreateButton(parent, pos, size, text, color)
+local ReelFillCorner = Instance.new("UICorner")
+ReelFillCorner.CornerRadius = UDim.new(0, 3)
+ReelFillCorner.Parent = ReelSliderFill
+
+-- Delay Fishing Section
+local FishLabel = Instance.new("TextLabel")
+FishLabel.Parent = Main
+FishLabel.BackgroundTransparency = 1
+FishLabel.Position = UDim2.new(0, 10, 0, 95)
+FishLabel.Size = UDim2.new(0.5, -10, 0, 16)
+FishLabel.Font = Enum.Font.Gotham
+FishLabel.Text = "Delay Fishing"
+FishLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+FishLabel.TextSize = 10
+FishLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local FishValue = Instance.new("TextLabel")
+FishValue.Parent = Main
+FishValue.BackgroundTransparency = 1
+FishValue.Position = UDim2.new(0.5, 0, 0, 95)
+FishValue.Size = UDim2.new(0.5, -10, 0, 16)
+FishValue.Font = Enum.Font.GothamBold
+FishValue.Text = string.format("%.1f", Config.DelayFishing)
+FishValue.TextColor3 = Color3.new(1, 1, 1)
+FishValue.TextSize = 10
+FishValue.TextXAlignment = Enum.TextXAlignment.Right
+
+local FishSliderBg = Instance.new("Frame")
+FishSliderBg.Parent = Main
+FishSliderBg.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+FishSliderBg.Position = UDim2.new(0, 10, 0, 113)
+FishSliderBg.Size = UDim2.new(1, -20, 0, 6)
+
+local FishSliderCorner = Instance.new("UICorner")
+FishSliderCorner.CornerRadius = UDim.new(0, 3)
+FishSliderCorner.Parent = FishSliderBg
+
+local FishSliderFill = Instance.new("Frame")
+FishSliderFill.Parent = FishSliderBg
+FishSliderFill.BackgroundColor3 = Color3.fromRGB(100, 100, 255)
+FishSliderFill.Size = UDim2.new(Config.DelayFishing / 5, 0, 1, 0)
+
+local FishFillCorner = Instance.new("UICorner")
+FishFillCorner.CornerRadius = UDim.new(0, 3)
+FishFillCorner.Parent = FishSliderFill
+
+-- Buttons Row 1 (Trading, Menu, Quest)
+local function CreateSmallBtn(name, posX, posY)
     local btn = Instance.new("TextButton")
-    btn.Parent = parent
-    btn.BackgroundColor3 = color or Color3.fromRGB(80, 80, 80)
-    btn.BorderSizePixel = 0
-    btn.Position = pos
-    btn.Size = size
-    btn.Font = Enum.Font.GothamBold
-    btn.Text = text
-    btn.TextColor3 = Color3.new(1, 1, 1)
-    btn.TextSize = 11
+    btn.Parent = Main
+    btn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+    btn.Position = UDim2.new(0, posX, 0, posY)
+    btn.Size = UDim2.new(0, 50, 0, 22)
+    btn.Font = Enum.Font.Gotham
+    btn.Text = name
+    btn.TextColor3 = Color3.fromRGB(150, 150, 150)
+    btn.TextSize = 9
     
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 8)
+    corner.CornerRadius = UDim.new(0, 5)
     corner.Parent = btn
     
     return btn
 end
 
--- HELPER: Create Label
-local function CreateLabel(parent, pos, size, text, textSize)
-    local label = Instance.new("TextLabel")
-    label.Parent = parent
-    label.BackgroundTransparency = 1
-    label.Position = pos
-    label.Size = size
-    label.Font = Enum.Font.Gotham
-    label.Text = text
-    label.TextColor3 = Color3.new(1, 1, 1)
-    label.TextSize = textSize or 11
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    return label
-end
+local TradingBtn = CreateSmallBtn("Trading", 10, 128)
+local MenuBtn = CreateSmallBtn("Menu", 65, 128)
+local QuestBtn = CreateSmallBtn("Quest", 120, 128)
 
--- HELPER: Create Slider
-local function CreateSlider(parent, pos, name, min, max, default, callback)
-    local frame = Instance.new("Frame")
-    frame.Parent = parent
-    frame.BackgroundTransparency = 1
-    frame.Position = pos
-    frame.Size = UDim2.new(1, -30, 0, 40)
-    
-    local label = Instance.new("TextLabel")
-    label.Parent = frame
-    label.BackgroundTransparency = 1
-    label.Position = UDim2.new(0, 0, 0, 0)
-    label.Size = UDim2.new(1, 0, 0, 18)
-    label.Font = Enum.Font.GothamBold
-    label.Text = string.format("%s: %.2f", name, default)
-    label.TextColor3 = Color3.new(1, 1, 1)
-    label.TextSize = 11
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    
-    local sliderBg = Instance.new("Frame")
-    sliderBg.Parent = frame
-    sliderBg.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    sliderBg.Position = UDim2.new(0, 0, 0, 22)
-    sliderBg.Size = UDim2.new(1, 0, 0, 14)
-    
-    local sliderCorner = Instance.new("UICorner")
-    sliderCorner.CornerRadius = UDim.new(0, 7)
-    sliderCorner.Parent = sliderBg
-    
-    local sliderFill = Instance.new("Frame")
-    sliderFill.Parent = sliderBg
-    sliderFill.BackgroundColor3 = Color3.fromRGB(150, 0, 255)
-    sliderFill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
-    
-    local fillCorner = Instance.new("UICorner")
-    fillCorner.CornerRadius = UDim.new(0, 7)
-    fillCorner.Parent = sliderFill
-    
-    local dragging = false
-    
-    sliderBg.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-        end
-    end)
-    
-    sliderBg.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
-        end
-    end)
-    
-    UIS.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+-- Buttons Row 2 (Teleport, Stable Result v1)
+local TeleportBtn = Instance.new("TextButton")
+TeleportBtn.Parent = Main
+TeleportBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+TeleportBtn.Position = UDim2.new(0, 10, 0, 155)
+TeleportBtn.Size = UDim2.new(0, 55, 0, 22)
+TeleportBtn.Font = Enum.Font.Gotham
+TeleportBtn.Text = "Teleport"
+TeleportBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+TeleportBtn.TextSize = 9
+
+local TPCorner = Instance.new("UICorner")
+TPCorner.CornerRadius = UDim.new(0, 5)
+TPCorner.Parent = TeleportBtn
+
+local StableBtn = Instance.new("TextButton")
+StableBtn.Parent = Main
+StableBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+StableBtn.Position = UDim2.new(0, 70, 0, 155)
+StableBtn.Size = UDim2.new(0, 100, 0, 22)
+StableBtn.Font = Enum.Font.Gotham
+StableBtn.Text = "Stable Result v1"
+StableBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+StableBtn.TextSize = 9
+
+local StableCorner = Instance.new("UICorner")
+StableCorner.CornerRadius = UDim.new(0, 5)
+StableCorner.Parent = StableBtn
+
+-- Click Button (Main Toggle)
+local ClickBtn = Instance.new("TextButton")
+ClickBtn.Parent = Main
+ClickBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 90)
+ClickBtn.Position = UDim2.new(0, 10, 0, 183)
+ClickBtn.Size = UDim2.new(1, -20, 0, 28)
+ClickBtn.Font = Enum.Font.GothamBold
+ClickBtn.Text = "Click"
+ClickBtn.TextColor3 = Color3.new(1, 1, 1)
+ClickBtn.TextSize = 12
+
+local ClickCorner = Instance.new("UICorner")
+ClickCorner.CornerRadius = UDim.new(0, 6)
+ClickCorner.Parent = ClickBtn
+
+-- Status Label
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Parent = Main
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Position = UDim2.new(0, 10, 0, 216)
+StatusLabel.Size = UDim2.new(1, -20, 0, 22)
+StatusLabel.Font = Enum.Font.Gotham
+StatusLabel.Text = "🐟 0 | 💰 0"
+StatusLabel.TextColor3 = Color3.fromRGB(120, 120, 120)
+StatusLabel.TextSize = 10
+
+-- ════════════════════════════════════════════════════════
+-- SLIDER LOGIC
+-- ════════════════════════════════════════════════════════
+local draggingReel, draggingFish = false, false
+
+ReelSliderBg.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then draggingReel = true end
+end)
+
+ReelSliderBg.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then draggingReel = false end
+end)
+
+FishSliderBg.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then draggingFish = true end
+end)
+
+FishSliderBg.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then draggingFish = false end
+end)
+
+UIS.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        if draggingReel then
             local pos = UIS:GetMouseLocation()
-            local relX = pos.X - sliderBg.AbsolutePosition.X
-            local percent = math.clamp(relX / sliderBg.AbsoluteSize.X, 0, 1)
-            local value = min + (max - min) * percent
-            
-            sliderFill.Size = UDim2.new(percent, 0, 1, 0)
-            label.Text = string.format("%s: %.2f", name, value)
-            
-            callback(value)
+            local rel = math.clamp((pos.X - ReelSliderBg.AbsolutePosition.X) / ReelSliderBg.AbsoluteSize.X, 0, 1)
+            Config.DelayReels = 0.01 + rel * 0.49
+            ReelSliderFill.Size = UDim2.new(rel, 0, 1, 0)
+            ReelValue.Text = string.format("%.2f", Config.DelayReels)
         end
-    end)
-    
-    return frame, label, sliderFill
-end
-
--- ════════════════════════════════════════════════════════
--- GUI CONTENT
--- ════════════════════════════════════════════════════════
-
--- STATS
-local StatsLabel = CreateLabel(ContentFrame, UDim2.new(0, 15, 0, 5), UDim2.new(1, -30, 0, 55), "", 10)
-StatsLabel.TextYAlignment = Enum.TextYAlignment.Top
-
-task.spawn(function()
-    while task.wait(0.2) do
-        pcall(function()
-            local status = Config.Enabled and "⚡ ACTIVE" or "🔴 OFF"
-            local action = "Idle"
-            
-            if Config.Enabled then
-                if IsSelling then action = "💰 Selling"
-                elseif IsReeling then action = "⚡ Reeling"
-                elseif IsFishing then action = "⏳ Waiting"
-                else action = "🎣 Casting" end
-            end
-            
-            StatsLabel.Text = string.format(
-                "%s | %s\n🐟 %d caught | 🎣 %d casts | 💰 %d sold\n📦 AutoSell: %s [%d/%d]",
-                status, action,
-                Stats.Fish, Stats.Casts, Stats.TotalSold,
-                Config.AutoSell and "ON" or "OFF",
-                Stats.FishSinceLastSell, Config.SellThreshold
-            )
-            
-            MiniStatus.Text = string.format("🐟%d 💰%d", Stats.Fish, Stats.TotalSold)
-        end)
+        
+        if draggingFish then
+            local pos = UIS:GetMouseLocation()
+            local rel = math.clamp((pos.X - FishSliderBg.AbsolutePosition.X) / FishSliderBg.AbsoluteSize.X, 0, 1)
+            Config.DelayFishing = 0.1 + rel * 4.9
+            FishSliderFill.Size = UDim2.new(rel, 0, 1, 0)
+            FishValue.Text = string.format("%.1f", Config.DelayFishing)
+        end
     end
 end)
 
--- SECTION: BLATAN V1
-local Section1 = CreateLabel(ContentFrame, UDim2.new(0, 15, 0, 65), UDim2.new(1, -30, 0, 20), "━━━ BLATAN V1 ━━━", 10)
-Section1.TextXAlignment = Enum.TextXAlignment.Center
-Section1.TextColor3 = Color3.fromRGB(150, 0, 255)
+-- ════════════════════════════════════════════════════════
+-- BUTTON LOGIC
+-- ════════════════════════════════════════════════════════
 
--- Delay Reels Slider
-local _, delayReelsLabel = CreateSlider(ContentFrame, UDim2.new(0, 15, 0, 90), "⚡ Delay Reels", 0.01, 0.5, Config.DelayReels, function(val)
-    Config.DelayReels = val
-end)
-
--- Delay Fishing Slider
-local _, delayFishLabel = CreateSlider(ContentFrame, UDim2.new(0, 15, 0, 135), "🎣 Delay Fishing", 0.5, 5, Config.DelayFishing, function(val)
-    Config.DelayFishing = val
-end)
-
--- SECTION: FEATURES
-local Section2 = CreateLabel(ContentFrame, UDim2.new(0, 15, 0, 185), UDim2.new(1, -30, 0, 20), "━━━ FEATURES ━━━", 10)
-Section2.TextXAlignment = Enum.TextXAlignment.Center
-Section2.TextColor3 = Color3.fromRGB(150, 0, 255)
-
--- Auto Sell Toggle
-SellToggleBtn = CreateButton(ContentFrame, UDim2.new(0, 15, 0, 210), UDim2.new(0.5, -20, 0, 28), "💰 Auto Sell: ON", Color3.fromRGB(0, 200, 100))
-SellToggleBtn.MouseButton1Click:Connect(ToggleAutoSell)
-
--- Hide Animation Toggle
-HideAnimBtn = CreateButton(ContentFrame, UDim2.new(0.5, 5, 0, 210), UDim2.new(0.5, -20, 0, 28), "👻 Hide Anim: OFF", Color3.fromRGB(80, 80, 80))
-HideAnimBtn.MouseButton1Click:Connect(ToggleHideAnimation)
-
--- SECTION: POSITION
-local Section3 = CreateLabel(ContentFrame, UDim2.new(0, 15, 0, 248), UDim2.new(1, -30, 0, 20), "━━━ POSITION ━━━", 10)
-Section3.TextXAlignment = Enum.TextXAlignment.Center
-Section3.TextColor3 = Color3.fromRGB(150, 0, 255)
-
--- Save Position Button
-SavePosBtn = CreateButton(ContentFrame, UDim2.new(0, 15, 0, 273), UDim2.new(0.33, -13, 0, 28), "📍 Save", Color3.fromRGB(0, 150, 255))
-SavePosBtn.MouseButton1Click:Connect(function()
-    if SavePosition() then
-        SavePosBtn.Text = "📍 Saved!"
-        task.delay(1, function() SavePosBtn.Text = "📍 Save" end)
-    end
-end)
-
--- Teleport Button
-TeleportBtn = CreateButton(ContentFrame, UDim2.new(0.33, 2, 0, 273), UDim2.new(0.33, -4, 0, 28), "🚀 TP", Color3.fromRGB(255, 165, 0))
-TeleportBtn.MouseButton1Click:Connect(function()
-    if TeleportToSavedPosition() then
-        TeleportBtn.Text = "🚀 Done!"
-        task.delay(1, function() TeleportBtn.Text = "🚀 TP" end)
+-- Main Toggle (Automatically)
+AutoBtn.MouseButton1Click:Connect(function()
+    Config.Enabled = not Config.Enabled
+    if Config.Enabled then
+        AutoBtn.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
+        AutoBtn.TextColor3 = Color3.new(1, 1, 1)
+        Stroke.Color = Color3.fromRGB(80, 200, 120)
+        ResetState()
+        StartDetection()
+        if Config.SavedPosition then TeleportToSaved() end
     else
-        TeleportBtn.Text = "❌ No Pos"
-        task.delay(1, function() TeleportBtn.Text = "🚀 TP" end)
+        AutoBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+        AutoBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+        Stroke.Color = Color3.fromRGB(80, 80, 100)
+        StopDetection()
+        ResetState()
     end
 end)
 
--- Clear Position Button
-ClearPosBtn = CreateButton(ContentFrame, UDim2.new(0.66, 2, 0, 273), UDim2.new(0.33, -13, 0, 28), "🗑️ Clear", Color3.fromRGB(255, 80, 80))
-ClearPosBtn.MouseButton1Click:Connect(function()
-    ClearPosition()
-    ClearPosBtn.Text = "🗑️ Cleared!"
-    task.delay(1, function() ClearPosBtn.Text = "🗑️ Clear" end)
+-- Click Button
+ClickBtn.MouseButton1Click:Connect(function()
+    Config.Enabled = not Config.Enabled
+    if Config.Enabled then
+        ClickBtn.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
+        AutoBtn.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
+        AutoBtn.TextColor3 = Color3.new(1, 1, 1)
+        Stroke.Color = Color3.fromRGB(80, 200, 120)
+        ResetState()
+        StartDetection()
+    else
+        ClickBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 90)
+        AutoBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+        AutoBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+        Stroke.Color = Color3.fromRGB(80, 80, 100)
+        StopDetection()
+        ResetState()
+    end
 end)
 
--- Auto Teleport Toggle
-AutoTPBtn = CreateButton(ContentFrame, UDim2.new(0, 15, 0, 306), UDim2.new(1, -30, 0, 28), "📍 Auto TP: OFF", Color3.fromRGB(80, 80, 80))
-AutoTPBtn.MouseButton1Click:Connect(ToggleAutoTeleport)
+-- Teleport Button (Save/TP Position)
+local tpMode = "save"
+TeleportBtn.MouseButton1Click:Connect(function()
+    if tpMode == "save" then
+        if SavePosition() then
+            TeleportBtn.Text = "TP Back"
+            TeleportBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 255)
+            TeleportBtn.TextColor3 = Color3.new(1, 1, 1)
+            tpMode = "tp"
+        end
+    else
+        TeleportToSaved()
+        TeleportBtn.Text = "Teleport"
+        TeleportBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+        TeleportBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+        tpMode = "save"
+    end
+end)
 
--- MAIN TOGGLE BUTTON
-MainToggle = CreateButton(ContentFrame, UDim2.new(0, 15, 0, 345), UDim2.new(1, -30, 0, 45), "🎣 START", Color3.fromRGB(255, 0, 0))
-MainToggle.TextSize = 16
-MainToggle.MouseButton1Click:Connect(ToggleScript)
+-- Stable Result (Auto Sell Toggle)
+StableBtn.MouseButton1Click:Connect(function()
+    Config.AutoSell = not Config.AutoSell
+    if Config.AutoSell then
+        StableBtn.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
+        StableBtn.TextColor3 = Color3.new(1, 1, 1)
+    else
+        StableBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+        StableBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+    end
+end)
+
+-- Menu (Hide Animation)
+MenuBtn.MouseButton1Click:Connect(function()
+    Config.HideAnimation = not Config.HideAnimation
+    if Config.HideAnimation then
+        MenuBtn.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
+        MenuBtn.TextColor3 = Color3.new(1, 1, 1)
+    else
+        MenuBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+        MenuBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+    end
+end)
+
+-- Quest (Auto Teleport)
+QuestBtn.MouseButton1Click:Connect(function()
+    Config.AutoTeleport = not Config.AutoTeleport
+    if Config.AutoTeleport then
+        QuestBtn.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
+        QuestBtn.TextColor3 = Color3.new(1, 1, 1)
+    else
+        QuestBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+        QuestBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+    end
+end)
+
+-- Trading (Sell Now)
+TradingBtn.MouseButton1Click:Connect(function()
+    if not IsSelling then task.spawn(SellAllFish) end
+end)
+
+-- Status Update
+task.spawn(function()
+    while task.wait(0.3) do
+        StatusLabel.Text = string.format("🐟 %d | 💰 %d | [%d/5]", Stats.Fish, Stats.TotalSold, Stats.FishSinceLastSell)
+    end
+end)
 
 -- ════════════════════════════════════════════════════════
 -- KEYBINDS
 -- ════════════════════════════════════════════════════════
 UIS.InputBegan:Connect(function(input, processed)
     if processed then return end
-    
     if input.KeyCode == Enum.KeyCode.Delete then
         Main.Visible = not Main.Visible
     elseif input.KeyCode == Enum.KeyCode.F6 then
-        ToggleScript()
-    elseif input.KeyCode == Enum.KeyCode.F7 then
-        ToggleAutoSell()
-    elseif input.KeyCode == Enum.KeyCode.F8 then
-        if not IsSelling then task.spawn(SellAllFish) end
-    elseif input.KeyCode == Enum.KeyCode.F9 then
-        ResetState()
-    elseif input.KeyCode == Enum.KeyCode.M then
-        ToggleMinimize()
-    elseif input.KeyCode == Enum.KeyCode.P then
-        SavePosition()
-    elseif input.KeyCode == Enum.KeyCode.T then
-        TeleportToSavedPosition()
+        ClickBtn.MouseButton1Click:Fire()
     end
 end)
 
 print("════════════════════════════════════════")
-print("✅ FISCH AUTO - BLATAN V1 LOADED!")
+print("✅ BLATAN V1 LOADED!")
 print("════════════════════════════════════════")
-print("🎮 KEYBINDS:")
-print("  DEL = Hide/Show GUI")
-print("  F6 = Start/Stop")
-print("  F7 = Toggle Auto Sell")
-print("  F8 = Sell Now")
-print("  F9 = Reset State")
-print("  M = Minimize")
-print("  P = Save Position")
-print("  T = Teleport to Saved")
-print("════════════════════════════════════════")
-print("⚡ BLATAN V1 Features:")
-print("  - Delay Reels (Adjustable)")
-print("  - Delay Fishing (Adjustable)")
-print("  - Save Position + Auto TP")
-print("  - Hide Animation")
+print("DEL = Hide/Show | F6 = Toggle")
 print("════════════════════════════════════════")
