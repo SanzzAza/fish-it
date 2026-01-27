@@ -1,6 +1,6 @@
 --[[
     ════════════════════════════════════════════════════════
-    🎣 FISCH AUTO - SPAM REEL + AUTO SELL (FIXED!)
+    🎣 FISCH AUTO - SPAM REEL + AUTO SELL (MINIMIZE!)
     AUTO LANJUT MANCING SETELAH SELL!
     ════════════════════════════════════════════════════════
 ]]
@@ -49,9 +49,10 @@ local IsFishing = false
 local IsReeling = false
 local IsSelling = false
 local LastCast = 0
+local IsMinimized = false
 
 -- ════════════════════════════════════════════════════════
--- RESET STATE FUNCTION (NEW!)
+-- RESET STATE FUNCTION
 -- ════════════════════════════════════════════════════════
 local function ResetState()
     IsFishing = false
@@ -106,16 +107,6 @@ end
 -- FISCH SELL SYSTEM
 -- ════════════════════════════════════════════════════════
 
-local function DebugRemotes()
-    print("═══════ DEBUG REMOTES ═══════")
-    for _, obj in pairs(RS:GetDescendants()) do
-        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
-            print("📡 " .. obj.ClassName .. ": " .. obj:GetFullName())
-        end
-    end
-    print("═════════════════════════════")
-end
-
 local function GetNetworkFolder()
     local possiblePaths = {
         RS:FindFirstChild("Network"),
@@ -153,21 +144,14 @@ local function FindAllSellRemotes()
     return sellRemotes
 end
 
--- MAIN SELL FUNCTION
 local function SellAllFish()
     if IsSelling then return false end
     IsSelling = true
     
-    -- SIMPAN STATE SEBELUM SELL
-    local wasEnabled = Config.Enabled
-    
-    print("💰 ═══════════════════════════════════")
     print("💰 SELLING ALL FISH...")
-    print("💰 ═══════════════════════════════════")
     
     local success = false
     
-    -- METHOD 1: Fisch specific remotes
     local fischRemoteNames = {
         "SellFish", "SellAllFish", "Sell", "SellAll",
         "sellfish", "sellall", "QuickSell", "InstaSell",
@@ -177,8 +161,6 @@ local function SellAllFish()
     for _, remoteName in pairs(fischRemoteNames) do
         local remote = RS:FindFirstChild(remoteName, true)
         if remote then
-            print("💰 Found: " .. remote:GetFullName())
-            
             pcall(function()
                 if remote:IsA("RemoteEvent") then
                     remote:FireServer()
@@ -194,13 +176,11 @@ local function SellAllFish()
                     remote:InvokeServer("All")
                 end
             end)
-            
             success = true
             task.wait(0.2)
         end
     end
     
-    -- METHOD 2: Network folder
     local networkFolder = GetNetworkFolder()
     if networkFolder and networkFolder ~= RS then
         for _, obj in pairs(networkFolder:GetDescendants()) do
@@ -221,7 +201,6 @@ local function SellAllFish()
         end
     end
     
-    -- METHOD 3: All sell remotes
     local allSellRemotes = FindAllSellRemotes()
     if #allSellRemotes > 0 then
         for _, remote in pairs(allSellRemotes) do
@@ -241,7 +220,6 @@ local function SellAllFish()
         end
     end
     
-    -- METHOD 4: ProximityPrompt
     for _, obj in pairs(workspace:GetDescendants()) do
         if obj:IsA("ProximityPrompt") then
             local name = obj.Name:lower()
@@ -269,7 +247,6 @@ local function SellAllFish()
         end
     end
     
-    -- METHOD 5: GUI Buttons
     for _, gui in pairs(PlayerGui:GetChildren()) do
         if gui:IsA("ScreenGui") and gui.Enabled and gui.Name ~= "FischSpamGUI" then
             for _, obj in pairs(gui:GetDescendants()) do
@@ -289,7 +266,6 @@ local function SellAllFish()
                         success = true
                         task.wait(0.3)
                         
-                        -- Click confirm/all buttons
                         for _, btn in pairs(gui:GetDescendants()) do
                             if (btn:IsA("TextButton") or btn:IsA("ImageButton")) and btn.Visible then
                                 local btnName = btn.Name:lower()
@@ -314,30 +290,20 @@ local function SellAllFish()
         end
     end
     
-    -- HASIL
     if success then
         Stats.TotalSold = Stats.TotalSold + Stats.FishSinceLastSell
-        print("💰 ═══════════════════════════════════")
         print(string.format("💰 SOLD! Total: %d fish", Stats.TotalSold))
-        print("💰 ═══════════════════════════════════")
         Stats.FishSinceLastSell = 0
-    else
-        print("⚠️ Could not find sell method!")
     end
     
-    -- ═══════════════════════════════════════════════════
-    -- FIXED: RESET STATE DAN LANJUT MANCING!
-    -- ═══════════════════════════════════════════════════
     task.wait(1)
     
     IsSelling = false
     IsFishing = false
     IsReeling = false
-    LastCast = 0  -- Reset LastCast biar bisa cast langsung
+    LastCast = 0
     
-    print("🔄 State reset - Continuing fishing...")
-    
-    -- Re-equip rod setelah sell
+    print("🔄 Continuing fishing...")
     task.wait(0.5)
     EquipRod()
     
@@ -350,19 +316,11 @@ local function CheckAndSell()
     
     if Stats.FishSinceLastSell >= Config.SellThreshold then
         print(string.format("💰 Reached %d fish! Selling...", Config.SellThreshold))
-        
-        -- Stop fishing sementara
         IsFishing = false
         IsReeling = false
-        
         task.wait(0.5)
-        
-        -- Sell
         SellAllFish()
-        
-        -- FIXED: Pastikan bisa lanjut mancing
         task.wait(0.5)
-        print("🎣 Resuming fishing...")
     end
 end
 
@@ -393,18 +351,11 @@ local function HasReelUI()
 end
 
 -- ════════════════════════════════════════════════════════
--- CAST (FIXED!)
+-- CAST
 -- ════════════════════════════════════════════════════════
 local function DoCast()
-    -- FIXED: Tambah pengecekan IsSelling
-    if IsFishing or IsReeling or IsSelling then 
-        return 
-    end
-    
-    -- FIXED: Kurangi delay antar cast
-    if tick() - LastCast < 1.5 then 
-        return 
-    end
+    if IsFishing or IsReeling or IsSelling then return end
+    if tick() - LastCast < 1.5 then return end
     
     Stats.Casts = Stats.Casts + 1
     print("🎣 Casting #" .. Stats.Casts)
@@ -412,9 +363,7 @@ local function DoCast()
     EquipRod()
     
     local rod = GetRod()
-    if rod then
-        rod:Activate()
-    end
+    if rod then rod:Activate() end
     
     VIM:SendMouseButtonEvent(0, 0, 0, true, game, 0)
     task.wait(0.05)
@@ -423,10 +372,8 @@ local function DoCast()
     IsFishing = true
     LastCast = tick()
     
-    -- Timeout protection
     task.delay(20, function()
         if IsFishing and not IsReeling and not IsSelling then 
-            print("⏰ Cast timeout - resetting...")
             IsFishing = false 
             LastCast = 0
         end
@@ -442,8 +389,6 @@ local function StartSpamReel()
     if IsReeling then return end
     IsReeling = true
     
-    print("⚡ SPAM STARTED!")
-    
     local startTime = tick()
     local clickCount = 0
     
@@ -451,10 +396,7 @@ local function StartSpamReel()
         while IsReeling and Config.Enabled and not IsSelling do
             local hasUI = HasReelUI()
             
-            if not hasUI then
-                print("✅ UI gone! Fish caught!")
-                break
-            end
+            if not hasUI then break end
             
             VIM:SendMouseButtonEvent(0, 0, 0, true, game, 0)
             task.wait(0.01)
@@ -465,24 +407,17 @@ local function StartSpamReel()
             
             task.wait(Config.ClickSpeed)
             
-            if tick() - startTime > 30 then
-                print("⏰ Reel timeout!")
-                break
-            end
+            if tick() - startTime > 30 then break end
         end
         
-        local duration = math.floor((tick() - startTime) * 1000)
         Stats.Fish = Stats.Fish + 1
         Stats.FishSinceLastSell = Stats.FishSinceLastSell + 1
-        print(string.format("✅ Fish #%d! [%d/%d to sell]", 
-            Stats.Fish, Stats.FishSinceLastSell, Config.SellThreshold))
+        print(string.format("✅ Fish #%d! [%d/%d]", Stats.Fish, Stats.FishSinceLastSell, Config.SellThreshold))
         
-        -- FIXED: Reset state dengan benar
         IsReeling = false
         IsFishing = false
-        LastCast = 0  -- Biar bisa cast lagi segera
+        LastCast = 0
         
-        -- Check auto sell
         task.wait(0.3)
         if Config.Enabled and not IsSelling then
             CheckAndSell()
@@ -504,16 +439,11 @@ local function StartReelDetection()
     if ReelDetection then return end
     
     ReelDetection = RunService.RenderStepped:Connect(function()
-        -- FIXED: Cek semua kondisi
         if Config.Enabled and IsFishing and not IsReeling and not IsSelling then
             local hasUI = HasReelUI()
-            if hasUI then
-                print("🎯 UI DETECTED!")
-                StartSpamReel()
-            end
+            if hasUI then StartSpamReel() end
         end
     end)
-    print("✅ Detection active!")
 end
 
 local function StopReelDetection()
@@ -521,31 +451,27 @@ local function StopReelDetection()
         ReelDetection:Disconnect()
         ReelDetection = nil
     end
-    print("❌ Detection stopped!")
 end
+
+-- ════════════════════════════════════════════════════════
+-- GUI REFERENCES
+-- ════════════════════════════════════════════════════════
+local MainToggle, Glow, SellToggleButton, Main, ContentFrame, MinimizeButton, MiniBar
 
 -- ════════════════════════════════════════════════════════
 -- TOGGLE FUNCTIONS
 -- ════════════════════════════════════════════════════════
-local ToggleButton, Glow, SellToggleButton, MainToggle
-
 local function UpdateButtonVisuals()
+    if not MainToggle then return end
+    
     if Config.Enabled then
-        if MainToggle then
-            MainToggle.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-            MainToggle.Text = "⚡ STOP FISHING"
-        end
-        if Glow then
-            Glow.Color = Color3.fromRGB(0, 255, 0)
-        end
+        MainToggle.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+        MainToggle.Text = "⚡ STOP FISHING"
+        if Glow then Glow.Color = Color3.fromRGB(0, 255, 0) end
     else
-        if MainToggle then
-            MainToggle.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-            MainToggle.Text = "🎣 START FISHING"
-        end
-        if Glow then
-            Glow.Color = Color3.fromRGB(255, 0, 255)
-        end
+        MainToggle.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        MainToggle.Text = "🎣 START FISHING"
+        if Glow then Glow.Color = Color3.fromRGB(255, 0, 255) end
     end
 end
 
@@ -553,7 +479,6 @@ local function ToggleScript()
     Config.Enabled = not Config.Enabled
     
     if Config.Enabled then
-        -- Reset semua state saat start
         ResetState()
         StartReelDetection()
         print("✅ FISHING STARTED!")
@@ -574,46 +499,55 @@ local function ToggleAutoSell()
         if Config.AutoSell then
             SellToggleButton.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
             SellToggleButton.Text = string.format("💰 Auto Sell: ON (%d Fish)", Config.SellThreshold)
-            print("✅ Auto Sell ON!")
         else
             SellToggleButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
             SellToggleButton.Text = "💰 Auto Sell: OFF"
-            print("❌ Auto Sell OFF!")
         end
     end
 end
 
 -- ════════════════════════════════════════════════════════
--- MAIN LOOP (FIXED!)
+-- MINIMIZE FUNCTION
+-- ════════════════════════════════════════════════════════
+local function ToggleMinimize()
+    IsMinimized = not IsMinimized
+    
+    if IsMinimized then
+        -- MINIMIZE - Tampilkan bar kecil
+        ContentFrame.Visible = false
+        Main.Size = UDim2.new(0, 200, 0, 40)
+        MinimizeButton.Text = "+"
+        MiniBar.Visible = true
+    else
+        -- MAXIMIZE - Tampilkan full GUI
+        ContentFrame.Visible = true
+        Main.Size = UDim2.new(0, 320, 0, 320)
+        MinimizeButton.Text = "−"
+        MiniBar.Visible = false
+    end
+end
+
+-- ════════════════════════════════════════════════════════
+-- MAIN LOOP
 -- ════════════════════════════════════════════════════════
 task.spawn(function()
     while true do
-        task.wait(0.3)  -- Lebih cepat check
-        
-        -- FIXED: Kondisi yang lebih jelas
-        if Config.Enabled then
-            if not IsFishing and not IsReeling and not IsSelling then
-                DoCast()
-            end
+        task.wait(0.3)
+        if Config.Enabled and not IsFishing and not IsReeling and not IsSelling then
+            DoCast()
         end
     end
 end)
 
--- ════════════════════════════════════════════════════════
--- STATE MONITOR (NEW! - Auto Recovery)
--- ════════════════════════════════════════════════════════
+-- STATE MONITOR
 task.spawn(function()
     while true do
         task.wait(5)
-        
-        -- Auto recovery jika stuck
         if Config.Enabled and not IsSelling then
             local hasUI = HasReelUI()
-            
-            -- Jika enabled tapi tidak ada aktivitas selama 10 detik
             if not hasUI and not IsReeling and IsFishing then
                 if tick() - LastCast > 15 then
-                    print("⚠️ Stuck detected! Resetting...")
+                    print("⚠️ Stuck! Resetting...")
                     ResetState()
                 end
             end
@@ -624,71 +558,113 @@ end)
 -- ════════════════════════════════════════════════════════
 -- GUI
 -- ════════════════════════════════════════════════════════
-print("Creating GUI...")
-
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "FischSpamGUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.Parent = PlayerGui
 
-local success = pcall(function()
-    ScreenGui.Parent = PlayerGui
-end)
-
-if not success then
-    task.wait(1)
-    ScreenGui.Parent = PlayerGui
-end
-
-local Main = Instance.new("Frame")
+-- MAIN FRAME
+Main = Instance.new("Frame")
 Main.Name = "Main"
 Main.Parent = ScreenGui
 Main.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 Main.BorderSizePixel = 0
-Main.Position = UDim2.new(0.35, 0, 0.2, 0)
+Main.Position = UDim2.new(0, 10, 0.5, -160)
 Main.Size = UDim2.new(0, 320, 0, 320)
 Main.Active = true
 Main.Draggable = true
 
 local Corner = Instance.new("UICorner")
-Corner.CornerRadius = UDim.new(0, 15)
+Corner.CornerRadius = UDim.new(0, 12)
 Corner.Parent = Main
 
 Glow = Instance.new("UIStroke")
 Glow.Color = Color3.fromRGB(255, 0, 255)
-Glow.Thickness = 3
+Glow.Thickness = 2
 Glow.Parent = Main
 
-local Title = Instance.new("TextLabel")
-Title.Parent = Main
-Title.BackgroundColor3 = Color3.fromRGB(150, 0, 255)
-Title.BorderSizePixel = 0
-Title.Size = UDim2.new(1, 0, 0, 50)
-Title.Font = Enum.Font.GothamBold
-Title.Text = "🎣 FISCH AUTO + SELL ALL"
-Title.TextColor3 = Color3.new(1, 1, 1)
-Title.TextSize = 16
+-- TITLE BAR
+local TitleBar = Instance.new("Frame")
+TitleBar.Name = "TitleBar"
+TitleBar.Parent = Main
+TitleBar.BackgroundColor3 = Color3.fromRGB(150, 0, 255)
+TitleBar.BorderSizePixel = 0
+TitleBar.Size = UDim2.new(1, 0, 0, 40)
 
 local TitleCorner = Instance.new("UICorner")
-TitleCorner.CornerRadius = UDim.new(0, 15)
-TitleCorner.Parent = Title
+TitleCorner.CornerRadius = UDim.new(0, 12)
+TitleCorner.Parent = TitleBar
 
 local TitleFix = Instance.new("Frame")
-TitleFix.Parent = Title
+TitleFix.Parent = TitleBar
 TitleFix.BackgroundColor3 = Color3.fromRGB(150, 0, 255)
 TitleFix.BorderSizePixel = 0
-TitleFix.Position = UDim2.new(0, 0, 0.6, 0)
-TitleFix.Size = UDim2.new(1, 0, 0.4, 0)
+TitleFix.Position = UDim2.new(0, 0, 0.5, 0)
+TitleFix.Size = UDim2.new(1, 0, 0.5, 0)
 
+local TitleText = Instance.new("TextLabel")
+TitleText.Parent = TitleBar
+TitleText.BackgroundTransparency = 1
+TitleText.Position = UDim2.new(0, 10, 0, 0)
+TitleText.Size = UDim2.new(1, -50, 1, 0)
+TitleText.Font = Enum.Font.GothamBold
+TitleText.Text = "🎣 FISCH AUTO"
+TitleText.TextColor3 = Color3.new(1, 1, 1)
+TitleText.TextSize = 14
+TitleText.TextXAlignment = Enum.TextXAlignment.Left
+
+-- MINIMIZE BUTTON
+MinimizeButton = Instance.new("TextButton")
+MinimizeButton.Name = "Minimize"
+MinimizeButton.Parent = TitleBar
+MinimizeButton.BackgroundColor3 = Color3.fromRGB(100, 0, 200)
+MinimizeButton.BorderSizePixel = 0
+MinimizeButton.Position = UDim2.new(1, -35, 0, 5)
+MinimizeButton.Size = UDim2.new(0, 30, 0, 30)
+MinimizeButton.Font = Enum.Font.GothamBold
+MinimizeButton.Text = "−"
+MinimizeButton.TextColor3 = Color3.new(1, 1, 1)
+MinimizeButton.TextSize = 20
+
+local MinBtnCorner = Instance.new("UICorner")
+MinBtnCorner.CornerRadius = UDim.new(0, 8)
+MinBtnCorner.Parent = MinimizeButton
+
+MinimizeButton.MouseButton1Click:Connect(ToggleMinimize)
+
+-- MINI STATUS BAR (Saat Minimize)
+MiniBar = Instance.new("TextLabel")
+MiniBar.Name = "MiniBar"
+MiniBar.Parent = Main
+MiniBar.BackgroundTransparency = 1
+MiniBar.Position = UDim2.new(0, 10, 0, 40)
+MiniBar.Size = UDim2.new(1, -50, 0, 0)
+MiniBar.Font = Enum.Font.GothamBold
+MiniBar.Text = "🔴 OFF"
+MiniBar.TextColor3 = Color3.new(1, 1, 1)
+MiniBar.TextSize = 12
+MiniBar.TextXAlignment = Enum.TextXAlignment.Left
+MiniBar.Visible = false
+
+-- CONTENT FRAME (Yang bisa di-minimize)
+ContentFrame = Instance.new("Frame")
+ContentFrame.Name = "Content"
+ContentFrame.Parent = Main
+ContentFrame.BackgroundTransparency = 1
+ContentFrame.Position = UDim2.new(0, 0, 0, 45)
+ContentFrame.Size = UDim2.new(1, 0, 1, -45)
+
+-- STATS LABEL
 local StatsLabel = Instance.new("TextLabel")
-StatsLabel.Parent = Main
+StatsLabel.Parent = ContentFrame
 StatsLabel.BackgroundTransparency = 1
-StatsLabel.Position = UDim2.new(0, 15, 0, 55)
-StatsLabel.Size = UDim2.new(1, -30, 0, 100)
+StatsLabel.Position = UDim2.new(0, 15, 0, 5)
+StatsLabel.Size = UDim2.new(1, -30, 0, 85)
 StatsLabel.Font = Enum.Font.Gotham
 StatsLabel.Text = "Ready to fish!"
 StatsLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-StatsLabel.TextSize = 12
+StatsLabel.TextSize = 11
 StatsLabel.TextXAlignment = Enum.TextXAlignment.Left
 StatsLabel.TextYAlignment = Enum.TextYAlignment.Top
 
@@ -696,127 +672,134 @@ StatsLabel.TextYAlignment = Enum.TextYAlignment.Top
 task.spawn(function()
     while task.wait(0.2) do
         pcall(function()
-            local status = Config.Enabled and "⚡ ACTIVE" or "🔴 STOPPED"
-            local currentAction = "Idle"
+            local status = Config.Enabled and "⚡ ACTIVE" or "🔴 OFF"
+            local action = "Idle"
             
             if Config.Enabled then
-                if IsSelling then
-                    currentAction = "💰💰 SELLING! 💰💰"
-                elseif IsReeling then
-                    currentAction = "⚡⚡ REELING! ⚡⚡"
-                elseif IsFishing then
-                    currentAction = "⏳ Waiting for bite..."
-                else
-                    currentAction = "🎣 Casting..."
-                end
+                if IsSelling then action = "💰 SELLING!"
+                elseif IsReeling then action = "⚡ REELING!"
+                elseif IsFishing then action = "⏳ Waiting..."
+                else action = "🎣 Casting..." end
             end
             
             local sellStatus = Config.AutoSell and 
                 string.format("✅ [%d/%d]", Stats.FishSinceLastSell, Config.SellThreshold) or "❌ OFF"
             
             StatsLabel.Text = string.format(
-                "%s | %s\n\n🐟 Fish: %d | 🎣 Casts: %d\n🖱️ Clicks: %d | 💰 Sold: %d\n📦 Auto Sell: %s\n\n⚡ State: %s | %s | %s",
-                status, currentAction,
+                "%s | %s\n\n🐟 Fish: %d | 🎣 Casts: %d\n🖱️ Clicks: %d | 💰 Sold: %d\n📦 Auto Sell: %s",
+                status, action,
                 Stats.Fish, Stats.Casts,
                 Stats.Clicks, Stats.TotalSold,
-                sellStatus,
-                IsFishing and "Fishing" or "-",
-                IsReeling and "Reeling" or "-",
-                IsSelling and "Selling" or "-"
+                sellStatus
             )
+            
+            -- Update mini bar
+            MiniBar.Text = string.format("%s | 🐟%d | 💰%d", status, Stats.Fish, Stats.TotalSold)
+            if Config.Enabled then
+                MiniBar.TextColor3 = Color3.fromRGB(0, 255, 0)
+            else
+                MiniBar.TextColor3 = Color3.fromRGB(255, 100, 100)
+            end
         end)
     end
 end)
 
+-- SPEED LABEL
 local SpeedLabel = Instance.new("TextLabel")
-SpeedLabel.Parent = Main
+SpeedLabel.Parent = ContentFrame
 SpeedLabel.BackgroundTransparency = 1
-SpeedLabel.Position = UDim2.new(0, 15, 0, 160)
-SpeedLabel.Size = UDim2.new(1, -30, 0, 20)
+SpeedLabel.Position = UDim2.new(0, 15, 0, 95)
+SpeedLabel.Size = UDim2.new(1, -30, 0, 15)
 SpeedLabel.Font = Enum.Font.GothamBold
-SpeedLabel.Text = "⚡ Speed: ULTRA FAST | Auto-Recovery: ON"
+SpeedLabel.Text = "⚡ ULTRA FAST | Auto-Recovery: ON"
 SpeedLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
-SpeedLabel.TextSize = 10
+SpeedLabel.TextSize = 9
 SpeedLabel.TextXAlignment = Enum.TextXAlignment.Left
 
 -- AUTO SELL TOGGLE
 SellToggleButton = Instance.new("TextButton")
-SellToggleButton.Parent = Main
+SellToggleButton.Parent = ContentFrame
 SellToggleButton.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
 SellToggleButton.BorderSizePixel = 0
-SellToggleButton.Position = UDim2.new(0, 15, 0, 185)
-SellToggleButton.Size = UDim2.new(1, -30, 0, 32)
+SellToggleButton.Position = UDim2.new(0, 15, 0, 115)
+SellToggleButton.Size = UDim2.new(1, -30, 0, 30)
 SellToggleButton.Font = Enum.Font.GothamBold
 SellToggleButton.Text = "💰 Auto Sell: ON (5 Fish)"
 SellToggleButton.TextColor3 = Color3.new(1, 1, 1)
-SellToggleButton.TextSize = 12
+SellToggleButton.TextSize = 11
 
-local SellButtonCorner = Instance.new("UICorner")
-SellButtonCorner.CornerRadius = UDim.new(0, 8)
-SellButtonCorner.Parent = SellToggleButton
+local SellBtnCorner = Instance.new("UICorner")
+SellBtnCorner.CornerRadius = UDim.new(0, 8)
+SellBtnCorner.Parent = SellToggleButton
 
 SellToggleButton.MouseButton1Click:Connect(ToggleAutoSell)
 
--- SELL NOW BUTTON
+-- SELL NOW & RESET BUTTONS
 local SellNowButton = Instance.new("TextButton")
-SellNowButton.Parent = Main
+SellNowButton.Parent = ContentFrame
 SellNowButton.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
 SellNowButton.BorderSizePixel = 0
-SellNowButton.Position = UDim2.new(0, 15, 0, 222)
-SellNowButton.Size = UDim2.new(0.5, -20, 0, 32)
+SellNowButton.Position = UDim2.new(0, 15, 0, 150)
+SellNowButton.Size = UDim2.new(0.5, -20, 0, 28)
 SellNowButton.Font = Enum.Font.GothamBold
 SellNowButton.Text = "💰 SELL NOW"
 SellNowButton.TextColor3 = Color3.new(1, 1, 1)
-SellNowButton.TextSize = 11
+SellNowButton.TextSize = 10
 
 local SellNowCorner = Instance.new("UICorner")
 SellNowCorner.CornerRadius = UDim.new(0, 8)
 SellNowCorner.Parent = SellNowButton
 
 SellNowButton.MouseButton1Click:Connect(function()
-    if not IsSelling then
-        task.spawn(SellAllFish)
-    end
+    if not IsSelling then task.spawn(SellAllFish) end
 end)
 
--- RESET BUTTON (NEW!)
 local ResetButton = Instance.new("TextButton")
-ResetButton.Parent = Main
+ResetButton.Parent = ContentFrame
 ResetButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
 ResetButton.BorderSizePixel = 0
-ResetButton.Position = UDim2.new(0.5, 5, 0, 222)
-ResetButton.Size = UDim2.new(0.5, -20, 0, 32)
+ResetButton.Position = UDim2.new(0.5, 5, 0, 150)
+ResetButton.Size = UDim2.new(0.5, -20, 0, 28)
 ResetButton.Font = Enum.Font.GothamBold
-ResetButton.Text = "🔄 RESET STATE"
+ResetButton.Text = "🔄 RESET"
 ResetButton.TextColor3 = Color3.new(1, 1, 1)
-ResetButton.TextSize = 11
+ResetButton.TextSize = 10
 
 local ResetCorner = Instance.new("UICorner")
 ResetCorner.CornerRadius = UDim.new(0, 8)
 ResetCorner.Parent = ResetButton
 
-ResetButton.MouseButton1Click:Connect(function()
-    ResetState()
-    print("🔄 Manual state reset!")
-end)
+ResetButton.MouseButton1Click:Connect(ResetState)
 
--- MAIN START/STOP BUTTON
+-- MAIN TOGGLE BUTTON
 MainToggle = Instance.new("TextButton")
-MainToggle.Parent = Main
+MainToggle.Parent = ContentFrame
 MainToggle.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
 MainToggle.BorderSizePixel = 0
-MainToggle.Position = UDim2.new(0, 15, 0, 260)
-MainToggle.Size = UDim2.new(1, -30, 0, 45)
+MainToggle.Position = UDim2.new(0, 15, 0, 185)
+MainToggle.Size = UDim2.new(1, -30, 0, 40)
 MainToggle.Font = Enum.Font.GothamBold
 MainToggle.Text = "🎣 START FISHING"
 MainToggle.TextColor3 = Color3.new(1, 1, 1)
-MainToggle.TextSize = 16
+MainToggle.TextSize = 14
 
 local MainToggleCorner = Instance.new("UICorner")
 MainToggleCorner.CornerRadius = UDim.new(0, 10)
 MainToggleCorner.Parent = MainToggle
 
 MainToggle.MouseButton1Click:Connect(ToggleScript)
+
+-- KEYBIND INFO
+local KeybindInfo = Instance.new("TextLabel")
+KeybindInfo.Parent = ContentFrame
+KeybindInfo.BackgroundTransparency = 1
+KeybindInfo.Position = UDim2.new(0, 15, 0, 230)
+KeybindInfo.Size = UDim2.new(1, -30, 0, 40)
+KeybindInfo.Font = Enum.Font.Gotham
+KeybindInfo.Text = "DEL=Hide | F6=Toggle | F7=AutoSell | F8=Sell | F9=Reset"
+KeybindInfo.TextColor3 = Color3.fromRGB(150, 150, 150)
+KeybindInfo.TextSize = 9
+KeybindInfo.TextWrapped = true
 
 -- ════════════════════════════════════════════════════════
 -- KEYBINDS
@@ -831,25 +814,22 @@ UIS.InputBegan:Connect(function(input, processed)
     elseif input.KeyCode == Enum.KeyCode.F7 then
         ToggleAutoSell()
     elseif input.KeyCode == Enum.KeyCode.F8 then
-        if not IsSelling then
-            task.spawn(SellAllFish)
-        end
+        if not IsSelling then task.spawn(SellAllFish) end
     elseif input.KeyCode == Enum.KeyCode.F9 then
         ResetState()
-        print("🔄 State reset via F9!")
+    elseif input.KeyCode == Enum.KeyCode.M then
+        ToggleMinimize()
     end
 end)
 
 print("════════════════════════════════════════")
-print("✅ FISCH AUTO + SELL ALL LOADED!")
+print("✅ FISCH AUTO LOADED!")
 print("════════════════════════════════════════")
 print("🎮 KEYBINDS:")
-print("  DELETE = Hide/Show GUI")
-print("  F6 = Start/Stop Fishing")
-print("  F7 = Toggle Auto Sell")
-print("  F8 = Sell All Now")
-print("  F9 = Reset State (if stuck)")
-print("════════════════════════════════════════")
-print("✅ Auto-Recovery: ON")
-print("✅ Will continue fishing after sell!")
+print("  DEL = Hide/Show")
+print("  F6 = Start/Stop")
+print("  F7 = Auto Sell Toggle")
+print("  F8 = Sell Now")
+print("  F9 = Reset State")
+print("  M = Minimize/Maximize")
 print("════════════════════════════════════════")
