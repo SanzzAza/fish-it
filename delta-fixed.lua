@@ -1,607 +1,427 @@
 --[[
-    ╔═══════════════════════════════════════════════════╗
-    ║          AUTO FISH SCRIPT - FISH IT!              ║
-    ║              Versi Lengkap + GUI                  ║
-    ╚═══════════════════════════════════════════════════╝
+    🎣 FISH IT - AUTO FISHING SCRIPT 🎣
+    Features:
+    - Auto Fish dengan Perfect Cast
+    - Instant Catch
+    - Auto Sell
+    - Auto Buy (Rods, Bait, Boats)
+    - Teleport ke semua Islands
+    - Anti-AFK
+    - Auto Equip Best Rod
+    - GUI Interface
     
-    Game: Fish It!
-    Fitur:
-    • Auto Cast (lempar kail otomatis)
-    • Auto Catch/Reel (tangkap ikan otomatis)
-    • Auto Minigame (selesaikan minigame otomatis)
-    • Auto Sell (jual ikan otomatis) [Optional]
-    • GUI dengan Toggle
-    • Fish Counter
-    
-    Executor: Delta, Fluxus, Arceus X, Hydrogen, dll
-]]
+    Created for: Roblox Fish It by Fish Atelier Studios
+    Compatible with: KRNL, Synapse X, Fluxus, Electron, Delta
+--]]
 
--- ═══════════════════════════════════════
---              SERVICES
--- ═══════════════════════════════════════
+--// Services
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
-local RunService = game:GetService("RunService")
-local VirtualUser = game:GetService("VirtualUser")
 local VirtualInputManager = game:GetService("VirtualInputManager")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local TweenService = game:GetService("TweenService")
 
--- Variables
-local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
-local mouse = player:GetMouse()
-local character = player.Character or player.CharacterAdded:Wait()
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
--- Settings
-local Settings = {
+--// Variables
+getgenv().Settings = {
     AutoFish = false,
-    AutoMinigame = true,
+    InstantCatch = false,
     AutoSell = false,
-    CastPower = 100, -- 0-100
-    Delay = 0.3
+    AutoBuy = false,
+    AntiAFK = false,
+    PerfectCast = false,
+    AutoEquipBestRod = false,
+    FastReel = false,
+    WalkSpeed = 16,
+    JumpPower = 50
 }
 
--- Stats
-local Stats = {
-    FishCaught = 0,
-    FishSold = 0,
-    SessionTime = 0
-}
-
--- ═══════════════════════════════════════
---         HAPUS GUI LAMA
--- ═══════════════════════════════════════
-if game.CoreGui:FindFirstChild("FishItAutoGUI") then
-    game.CoreGui:FindFirstChild("FishItAutoGUI"):Destroy()
-end
-
--- ═══════════════════════════════════════
---           BUAT GUI UTAMA
--- ═══════════════════════════════════════
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "FishItAutoGUI"
-ScreenGui.Parent = game.CoreGui
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-ScreenGui.ResetOnSpawn = false
-
--- Main Frame
-local MainFrame = Instance.new("Frame")
-MainFrame.Name = "MainFrame"
-MainFrame.Parent = ScreenGui
-MainFrame.BackgroundColor3 = Color3.fromRGB(20, 25, 40)
-MainFrame.BorderSizePixel = 0
-MainFrame.Position = UDim2.new(0.02, 0, 0.25, 0)
-MainFrame.Size = UDim2.new(0, 240, 0, 340)
-MainFrame.Active = true
-MainFrame.Draggable = true
-
-local MainCorner = Instance.new("UICorner")
-MainCorner.CornerRadius = UDim.new(0, 12)
-MainCorner.Parent = MainFrame
-
--- Gradient Background
-local UIGradient = Instance.new("UIGradient")
-UIGradient.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(20, 30, 50)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(10, 15, 30))
+--// UI Library (Orion Lib style)
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/shlexware/Orion/main/source"))()
+local Window = Library:MakeWindow({
+    Name = "🎣 Fish It - Auto Farm",
+    HidePremium = false,
+    SaveConfig = true,
+    ConfigFolder = "FishIt_Config"
 })
-UIGradient.Rotation = 45
-UIGradient.Parent = MainFrame
 
--- Glowing Border
-local UIStroke = Instance.new("UIStroke")
-UIStroke.Color = Color3.fromRGB(0, 150, 255)
-UIStroke.Thickness = 2
-UIStroke.Transparency = 0.3
-UIStroke.Parent = MainFrame
+--// Tabs
+local MainTab = Window:MakeTab({
+    Name = "Main",
+    Icon = "rbxassetid://4483345998",
+    PremiumOnly = false
+})
 
--- ═══════════════════════════════════════
---              TITLE BAR
--- ═══════════════════════════════════════
-local TitleBar = Instance.new("Frame")
-TitleBar.Name = "TitleBar"
-TitleBar.Parent = MainFrame
-TitleBar.BackgroundColor3 = Color3.fromRGB(0, 100, 180)
-TitleBar.BorderSizePixel = 0
-TitleBar.Size = UDim2.new(1, 0, 0, 40)
+local AutoFarmTab = Window:MakeTab({
+    Name = "Auto Farm",
+    Icon = "rbxassetid://4483345998",
+    PremiumOnly = false
+})
 
-local TitleCorner = Instance.new("UICorner")
-TitleCorner.CornerRadius = UDim.new(0, 12)
-TitleCorner.Parent = TitleBar
+local TeleportTab = Window:MakeTab({
+    Name = "Teleport",
+    Icon = "rbxassetid://4483345998",
+    PremiumOnly = false
+})
 
--- Fix corner overlap
-local TitleFix = Instance.new("Frame")
-TitleFix.Parent = TitleBar
-TitleFix.BackgroundColor3 = Color3.fromRGB(0, 100, 180)
-TitleFix.BorderSizePixel = 0
-TitleFix.Position = UDim2.new(0, 0, 0.5, 0)
-TitleFix.Size = UDim2.new(1, 0, 0.5, 0)
+local MiscTab = Window:MakeTab({
+    Name = "Misc",
+    Icon = "rbxassetid://4483345998",
+    PremiumOnly = false
+})
 
--- Title Icon & Text
-local TitleText = Instance.new("TextLabel")
-TitleText.Parent = TitleBar
-TitleText.BackgroundTransparency = 1
-TitleText.Position = UDim2.new(0, 15, 0, 0)
-TitleText.Size = UDim2.new(1, -60, 1, 0)
-TitleText.Font = Enum.Font.GothamBlack
-TitleText.Text = "🎣 FISH IT! AUTO"
-TitleText.TextColor3 = Color3.fromRGB(255, 255, 255)
-TitleText.TextSize = 16
-TitleText.TextXAlignment = Enum.TextXAlignment.Left
+--// Remotes & Functions
+local Remotes = ReplicatedStorage:WaitForChild("Remotes", 9e9)
+local FishRemote = Remotes:WaitForChild("Fish", 9e9)
+local SellRemote = Remotes:WaitForChild("SellFish", 9e9)
+local EquipRemote = Remotes:WaitForChild("EquipItem", 9e9)
 
--- Minimize Button
-local MinimizeBtn = Instance.new("TextButton")
-MinimizeBtn.Parent = TitleBar
-MinimizeBtn.BackgroundColor3 = Color3.fromRGB(255, 180, 0)
-MinimizeBtn.Position = UDim2.new(1, -60, 0.5, -10)
-MinimizeBtn.Size = UDim2.new(0, 20, 0, 20)
-MinimizeBtn.Font = Enum.Font.GothamBold
-MinimizeBtn.Text = "−"
-MinimizeBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
-MinimizeBtn.TextSize = 16
-
-local MinCorner = Instance.new("UICorner")
-MinCorner.CornerRadius = UDim.new(0, 5)
-MinCorner.Parent = MinimizeBtn
-
--- Close Button
-local CloseBtn = Instance.new("TextButton")
-CloseBtn.Parent = TitleBar
-CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
-CloseBtn.Position = UDim2.new(1, -32, 0.5, -10)
-CloseBtn.Size = UDim2.new(0, 20, 0, 20)
-CloseBtn.Font = Enum.Font.GothamBold
-CloseBtn.Text = "✕"
-CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-CloseBtn.TextSize = 12
-
-local CloseCorner = Instance.new("UICorner")
-CloseCorner.CornerRadius = UDim.new(0, 5)
-CloseCorner.Parent = CloseBtn
-
--- ═══════════════════════════════════════
---           CONTENT FRAME
--- ═══════════════════════════════════════
-local ContentFrame = Instance.new("Frame")
-ContentFrame.Name = "Content"
-ContentFrame.Parent = MainFrame
-ContentFrame.BackgroundTransparency = 1
-ContentFrame.Position = UDim2.new(0, 0, 0, 45)
-ContentFrame.Size = UDim2.new(1, 0, 1, -45)
-
--- ═══════════════════════════════════════
---            STATUS SECTION
--- ═══════════════════════════════════════
-local StatusFrame = Instance.new("Frame")
-StatusFrame.Parent = ContentFrame
-StatusFrame.BackgroundColor3 = Color3.fromRGB(30, 35, 55)
-StatusFrame.Position = UDim2.new(0.05, 0, 0, 5)
-StatusFrame.Size = UDim2.new(0.9, 0, 0, 50)
-
-local StatusCorner = Instance.new("UICorner")
-StatusCorner.CornerRadius = UDim.new(0, 8)
-StatusCorner.Parent = StatusFrame
-
-local StatusLabel = Instance.new("TextLabel")
-StatusLabel.Parent = StatusFrame
-StatusLabel.BackgroundTransparency = 1
-StatusLabel.Size = UDim2.new(1, 0, 0.5, 0)
-StatusLabel.Font = Enum.Font.GothamSemibold
-StatusLabel.Text = "⏸️ Status: Idle"
-StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
-StatusLabel.TextSize = 13
-
-local CounterLabel = Instance.new("TextLabel")
-CounterLabel.Parent = StatusFrame
-CounterLabel.BackgroundTransparency = 1
-CounterLabel.Position = UDim2.new(0, 0, 0.5, 0)
-CounterLabel.Size = UDim2.new(1, 0, 0.5, 0)
-CounterLabel.Font = Enum.Font.GothamBold
-CounterLabel.Text = "🐟 Fish Caught: 0"
-CounterLabel.TextColor3 = Color3.fromRGB(100, 255, 150)
-CounterLabel.TextSize = 14
-
--- ═══════════════════════════════════════
---         FUNGSI BUAT TOGGLE
--- ═══════════════════════════════════════
-local buttonY = 60
-
-local function CreateToggle(name, icon, default, callback)
-    local ToggleFrame = Instance.new("Frame")
-    ToggleFrame.Parent = ContentFrame
-    ToggleFrame.BackgroundColor3 = Color3.fromRGB(35, 40, 60)
-    ToggleFrame.Position = UDim2.new(0.05, 0, 0, buttonY)
-    ToggleFrame.Size = UDim2.new(0.9, 0, 0, 38)
-    
-    local ToggleCorner = Instance.new("UICorner")
-    ToggleCorner.CornerRadius = UDim.new(0, 8)
-    ToggleCorner.Parent = ToggleFrame
-    
-    local ToggleLabel = Instance.new("TextLabel")
-    ToggleLabel.Parent = ToggleFrame
-    ToggleLabel.BackgroundTransparency = 1
-    ToggleLabel.Position = UDim2.new(0, 10, 0, 0)
-    ToggleLabel.Size = UDim2.new(0.65, 0, 1, 0)
-    ToggleLabel.Font = Enum.Font.GothamSemibold
-    ToggleLabel.Text = icon .. " " .. name
-    ToggleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    ToggleLabel.TextSize = 13
-    ToggleLabel.TextXAlignment = Enum.TextXAlignment.Left
-    
-    local ToggleBtn = Instance.new("TextButton")
-    ToggleBtn.Parent = ToggleFrame
-    ToggleBtn.BackgroundColor3 = default and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(100, 100, 110)
-    ToggleBtn.Position = UDim2.new(0.72, 0, 0.15, 0)
-    ToggleBtn.Size = UDim2.new(0.23, 0, 0.7, 0)
-    ToggleBtn.Font = Enum.Font.GothamBold
-    ToggleBtn.Text = default and "ON" or "OFF"
-    ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    ToggleBtn.TextSize = 12
-    
-    local BtnCorner = Instance.new("UICorner")
-    BtnCorner.CornerRadius = UDim.new(0, 6)
-    BtnCorner.Parent = ToggleBtn
-    
-    local isOn = default
-    
-    ToggleBtn.MouseButton1Click:Connect(function()
-        isOn = not isOn
-        ToggleBtn.Text = isOn and "ON" or "OFF"
+--// Auto Fish Function
+local function AutoFish()
+    while getgenv().Settings.AutoFish do
+        task.wait()
         
-        -- Animate color change
-        TweenService:Create(ToggleBtn, TweenInfo.new(0.2), {
-            BackgroundColor3 = isOn and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(100, 100, 110)
-        }):Play()
-        
-        callback(isOn)
-    end)
-    
-    buttonY = buttonY + 45
-    return ToggleBtn
-end
-
--- Buat Toggle Buttons
-CreateToggle("Auto Fish", "🎣", false, function(state)
-    Settings.AutoFish = state
-    if state then
-        StatusLabel.Text = "▶️ Status: Active"
-        StatusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-    else
-        StatusLabel.Text = "⏸️ Status: Idle"
-        StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
-    end
-end)
-
-CreateToggle("Auto Minigame", "🎮", true, function(state)
-    Settings.AutoMinigame = state
-end)
-
-CreateToggle("Auto Sell", "💰", false, function(state)
-    Settings.AutoSell = state
-end)
-
--- ═══════════════════════════════════════
---           INFO SECTION
--- ═══════════════════════════════════════
-local InfoFrame = Instance.new("Frame")
-InfoFrame.Parent = ContentFrame
-InfoFrame.BackgroundColor3 = Color3.fromRGB(25, 30, 45)
-InfoFrame.Position = UDim2.new(0.05, 0, 0, buttonY + 10)
-InfoFrame.Size = UDim2.new(0.9, 0, 0, 55)
-
-local InfoCorner = Instance.new("UICorner")
-InfoCorner.CornerRadius = UDim.new(0, 8)
-InfoCorner.Parent = InfoFrame
-
-local InfoText = Instance.new("TextLabel")
-InfoText.Parent = InfoFrame
-InfoText.BackgroundTransparency = 1
-InfoText.Size = UDim2.new(1, 0, 1, 0)
-InfoText.Font = Enum.Font.Gotham
-InfoText.Text = "📌 Hotkeys:\nF5 = Toggle Auto Fish\nF6 = Hide/Show GUI"
-InfoText.TextColor3 = Color3.fromRGB(180, 180, 200)
-InfoText.TextSize = 11
-InfoText.TextYAlignment = Enum.TextYAlignment.Center
-
--- Credits
-local CreditsLabel = Instance.new("TextLabel")
-CreditsLabel.Parent = ContentFrame
-CreditsLabel.BackgroundTransparency = 1
-CreditsLabel.Position = UDim2.new(0, 0, 1, -20)
-CreditsLabel.Size = UDim2.new(1, 0, 0, 20)
-CreditsLabel.Font = Enum.Font.Gotham
-CreditsLabel.Text = "Fish It! Auto v1.0"
-CreditsLabel.TextColor3 = Color3.fromRGB(100, 100, 120)
-CreditsLabel.TextSize = 10
-
--- ═══════════════════════════════════════
---         FISHING FUNCTIONS
--- ═══════════════════════════════════════
-
--- Cari Remotes
-local function FindRemotes()
-    local remotes = {}
-    
-    pcall(function()
-        -- Cari di ReplicatedStorage
-        for _, obj in pairs(ReplicatedStorage:GetDescendants()) do
-            if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
-                local name = obj.Name:lower()
-                if name:find("cast") or name:find("throw") or name:find("rod") then
-                    remotes.Cast = obj
-                elseif name:find("reel") or name:find("catch") or name:find("pull") then
-                    remotes.Reel = obj
-                elseif name:find("shake") or name:find("hook") then
-                    remotes.Shake = obj
-                elseif name:find("sell") then
-                    remotes.Sell = obj
-                elseif name:find("minigame") or name:find("game") then
-                    remotes.Minigame = obj
-                end
-            end
-        end
-    end)
-    
-    return remotes
-end
-
-local Remotes = FindRemotes()
-
--- Fungsi Cast Rod
-local function CastRod()
-    pcall(function()
-        -- Method 1: Fire Remote
-        if Remotes.Cast then
-            if Remotes.Cast:IsA("RemoteEvent") then
-                Remotes.Cast:FireServer()
-            elseif Remotes.Cast:IsA("RemoteFunction") then
-                Remotes.Cast:InvokeServer()
-            end
-        end
-        
-        -- Method 2: Simulasi Mouse Hold & Release (untuk power bar)
-        VirtualInputManager:SendMouseButtonEvent(mouse.X, mouse.Y, 0, true, game, 1)
-        wait(0.8) -- Hold untuk power
-        VirtualInputManager:SendMouseButtonEvent(mouse.X, mouse.Y, 0, false, game, 1)
-    end)
-end
-
--- Fungsi Auto Minigame
-local function DoMinigame()
-    pcall(function()
-        -- Cari minigame UI
-        for _, gui in pairs(playerGui:GetDescendants()) do
-            -- Cari button atau area yang perlu diklik
-            if gui:IsA("TextButton") or gui:IsA("ImageButton") then
-                local name = gui.Name:lower()
-                if (name:find("catch") or name:find("reel") or name:find("pull") or name:find("click")) and gui.Visible then
-                    -- Klik button
-                    firesignal(gui.MouseButton1Click)
-                end
+        local Rod = Character:FindFirstChildOfClass("Tool")
+        if Rod and Rod:FindFirstChild("events") then
+            -- Perfect Cast (Hold until max power)
+            if getgenv().Settings.PerfectCast then
+                local args = {
+                    [1] = "charge"
+                }
+                Rod.events.cast:FireServer(unpack(args))
+                
+                -- Hold for max power (adjust timing as needed)
+                task.wait(0.8)
+                
+                local args2 = {
+                    [1] = "release",
+                    [2] = 100 -- Max power
+                }
+                Rod.events.cast:FireServer(unpack(args2))
+            else
+                -- Normal Cast
+                local args = {
+                    [1] = "cast"
+                }
+                Rod.events.cast:FireServer(unpack(args))
             end
             
-            -- Untuk minigame dengan bar/slider
-            if gui:IsA("Frame") and gui.Name:lower():find("bar") then
-                if gui.Visible then
-                    -- Simulasi klik
-                    VirtualInputManager:SendMouseButtonEvent(mouse.X, mouse.Y, 0, true, game, 1)
-                    wait(0.05)
-                    VirtualInputManager:SendMouseButtonEvent(mouse.X, mouse.Y, 0, false, game, 1)
-                end
+            -- Wait for bite with Instant Catch
+            if getgenv().Settings.InstantCatch then
+                task.wait(0.5)
+                local args = {
+                    [1] = "instant_catch"
+                }
+                FishRemote:FireServer(unpack(args))
+            else
+                -- Wait for bite indicator
+                task.wait(2)
+                local args = {
+                    [1] = "reel"
+                }
+                FishRemote:FireServer(unpack(args))
             end
-        end
-        
-        -- Fire minigame remote jika ada
-        if Remotes.Minigame then
-            if Remotes.Minigame:IsA("RemoteEvent") then
-                Remotes.Minigame:FireServer()
-            end
-        end
-        
-        if Remotes.Reel then
-            if Remotes.Reel:IsA("RemoteEvent") then
-                Remotes.Reel:FireServer()
-            end
-        end
-        
-        -- Spam klik untuk minigame
-        for i = 1, 3 do
-            VirtualInputManager:SendMouseButtonEvent(mouse.X, mouse.Y, 0, true, game, 1)
-            wait(0.03)
-            VirtualInputManager:SendMouseButtonEvent(mouse.X, mouse.Y, 0, false, game, 1)
-            wait(0.03)
-        end
-    end)
-end
-
--- Fungsi Auto Sell
-local function SellFish()
-    pcall(function()
-        if Remotes.Sell then
-            if Remotes.Sell:IsA("RemoteEvent") then
-                Remotes.Sell:FireServer()
-            elseif Remotes.Sell:IsA("RemoteFunction") then
-                Remotes.Sell:InvokeServer()
-            end
-        end
-        
-        -- Cari NPC sell atau tombol sell
-        for _, gui in pairs(playerGui:GetDescendants()) do
-            if gui:IsA("TextButton") then
-                local text = gui.Text:lower()
-                if text:find("sell") and gui.Visible then
-                    firesignal(gui.MouseButton1Click)
-                    Stats.FishSold = Stats.FishSold + 1
-                end
-            end
-        end
-    end)
-end
-
--- Deteksi State Fishing
-local function GetFishingState()
-    -- Cek apakah ada minigame aktif
-    for _, gui in pairs(playerGui:GetDescendants()) do
-        if gui:IsA("Frame") or gui:IsA("ScreenGui") then
-            local name = gui.Name:lower()
             
-            if gui.Visible or (gui:IsA("ScreenGui") and gui.Enabled) then
-                if name:find("minigame") or name:find("catch") or name:find("reel") then
-                    return "minigame"
-                elseif name:find("wait") or name:find("bobber") or name:find("fishing") then
-                    return "waiting"
-                end
-            end
-        end
-    end
-    
-    -- Cek berdasarkan tool/rod yang diequip
-    if character then
-        local tool = character:FindFirstChildOfClass("Tool")
-        if tool then
-            local name = tool.Name:lower()
-            if name:find("rod") or name:find("fish") then
-                return "ready"
-            end
-        end
-    end
-    
-    return "idle"
-end
-
--- ═══════════════════════════════════════
---            MAIN LOOPS
--- ═══════════════════════════════════════
-
--- Auto Fishing Loop
-spawn(function()
-    while wait(0.5) do
-        if Settings.AutoFish then
-            local state = GetFishingState()
-            
-            if state == "idle" or state == "ready" then
-                StatusLabel.Text = "🎣 Status: Casting..."
-                CastRod()
-                wait(1.5)
-                StatusLabel.Text = "⏳ Status: Waiting..."
-            end
-        end
-    end
-end)
-
--- Auto Minigame Loop
-spawn(function()
-    while wait(0.1) do
-        if Settings.AutoFish and Settings.AutoMinigame then
-            local state = GetFishingState()
-            
-            if state == "minigame" then
-                StatusLabel.Text = "🎮 Status: Minigame!"
-                DoMinigame()
-                Stats.FishCaught = Stats.FishCaught + 1
-                CounterLabel.Text = "🐟 Fish Caught: " .. Stats.FishCaught
-            end
-        end
-    end
-end)
-
--- Auto Sell Loop
-spawn(function()
-    while wait(30) do -- Check setiap 30 detik
-        if Settings.AutoFish and Settings.AutoSell then
-            SellFish()
-        end
-    end
-end)
-
--- Update Character Reference
-player.CharacterAdded:Connect(function(char)
-    character = char
-end)
-
--- ═══════════════════════════════════════
---              HOTKEYS
--- ═══════════════════════════════════════
-UserInputService.InputBegan:Connect(function(input, processed)
-    if processed then return end
-    
-    -- F5 = Toggle Auto Fish
-    if input.KeyCode == Enum.KeyCode.F5 then
-        Settings.AutoFish = not Settings.AutoFish
-        if Settings.AutoFish then
-            StatusLabel.Text = "▶️ Status: Active"
-            StatusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+            task.wait(1.5) -- Cooldown between catches
         else
-            StatusLabel.Text = "⏸️ Status: Idle"
-            StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
+            -- Auto Equip Rod if not holding
+            if getgenv().Settings.AutoEquipBestRod then
+                EquipBestRod()
+            end
+            task.wait(1)
         end
     end
-    
-    -- F6 = Toggle GUI
-    if input.KeyCode == Enum.KeyCode.F6 then
-        MainFrame.Visible = not MainFrame.Visible
+end
+
+--// Auto Sell Function
+local function AutoSell()
+    while getgenv().Settings.AutoSell do
+        task.wait(5)
+        
+        local Backpack = LocalPlayer:FindFirstChild("Backpack")
+        if Backpack then
+            local FishFolder = Backpack:FindFirstChild("Fish")
+            if FishFolder and #FishFolder:GetChildren() > 0 then
+                -- Sell all fish
+                local args = {
+                    [1] = "SellAll"
+                }
+                SellRemote:FireServer(unpack(args))
+                
+                -- Notification
+                Library:MakeNotification({
+                    Name = "Auto Sell",
+                    Content = "Sold all fish!",
+                    Image = "rbxassetid://4483345998",
+                    Time = 3
+                })
+            end
+        end
     end
-end)
+end
 
--- ═══════════════════════════════════════
---           BUTTON EVENTS
--- ═══════════════════════════════════════
+--// Auto Buy Function
+local function AutoBuy()
+    while getgenv().Settings.AutoBuy do
+        task.wait(10)
+        
+        local Coins = LocalPlayer.leaderstats:FindFirstChild("Coins")
+        if Coins and Coins.Value > 1000 then
+            -- Logic to buy better rod/bait if available
+            local Shops = Workspace:FindFirstChild("Shops")
+            if Shops then
+                -- Check for better rods
+                for _, Item in pairs(Shops:GetDescendants()) do
+                    if Item:IsA("ClickDetector") and Item.Parent.Name:match("Rod") then
+                        fireclickdetector(Item)
+                        task.wait(0.5)
+                    end
+                end
+            end
+        end
+    end
+end
 
--- Minimize
-local isMinimized = false
-MinimizeBtn.MouseButton1Click:Connect(function()
-    isMinimized = not isMinimized
-    ContentFrame.Visible = not isMinimized
+--// Equip Best Rod Function
+function EquipBestRod()
+    local Backpack = LocalPlayer:FindFirstChild("Backpack")
+    local BestRod = nil
+    local BestStats = 0
     
-    TweenService:Create(MainFrame, TweenInfo.new(0.3), {
-        Size = isMinimized and UDim2.new(0, 240, 0, 40) or UDim2.new(0, 240, 0, 340)
-    }):Play()
+    if Backpack then
+        for _, Item in pairs(Backpack:GetChildren()) do
+            if Item:IsA("Tool") and Item:FindFirstChild("rod_stats") then
+                local Stats = Item:FindFirstChild("rod_stats")
+                local Luck = Stats and Stats:FindFirstChild("Luck") and Stats.Luck.Value or 0
+                
+                if Luck > BestStats then
+                    BestStats = Luck
+                    BestRod = Item
+                end
+            end
+        end
+        
+        if BestRod then
+            Humanoid:EquipTool(BestRod)
+        end
+    end
+end
+
+--// Teleport Function
+local function TeleportTo(CFrame)
+    local TweenInfo = TweenInfo.new(
+        (HumanoidRootPart.Position - CFrame.Position).Magnitude / 100,
+        Enum.EasingStyle.Linear
+    )
     
-    MinimizeBtn.Text = isMinimized and "+" or "−"
-end)
-
--- Close
-CloseBtn.MouseButton1Click:Connect(function()
-    Settings.AutoFish = false
-    ScreenGui:Destroy()
-end)
-
--- ═══════════════════════════════════════
---            NOTIFICATIONS
--- ═══════════════════════════════════════
-pcall(function()
-    game.StarterGui:SetCore("SendNotification", {
-        Title = "🎣 Fish It! Auto",
-        Text = "Script loaded successfully!\nF5 = Toggle | F6 = Hide GUI",
-        Duration = 5,
-        Icon = "rbxassetid://6023426915"
+    local Tween = TweenService:Create(HumanoidRootPart, TweenInfo, {
+        CFrame = CFrame
     })
-end)
+    
+    Tween:Play()
+    Tween.Completed:Wait()
+end
 
--- Print Info
-print([[
-╔═══════════════════════════════════════════╗
-║      🎣 FISH IT! AUTO FISH LOADED 🎣      ║
-╠═══════════════════════════════════════════╣
-║   Hotkeys:                                ║
-║   • F5 = Toggle Auto Fish                 ║
-║   • F6 = Hide/Show GUI                    ║
-║                                           ║
-║   Features:                               ║
-║   • Auto Cast                             ║
-║   • Auto Minigame                         ║
-║   • Auto Sell                             ║
-║   • Fish Counter                          ║
-╚═══════════════════════════════════════════╝
-]])
-
--- Anti AFK
-spawn(function()
-    while wait(60) do
-        pcall(function()
-            VirtualUser:CaptureController()
-            VirtualUser:ClickButton2(Vector2.new())
-        end)
+--// Anti-AFK
+local function AntiAFK()
+    while getgenv().Settings.AntiAFK do
+        VirtualInputManager:SendKeyEvent(true, "Space", false, game)
+        task.wait(0.1)
+        VirtualInputManager:SendKeyEvent(false, "Space", false, game)
+        task.wait(300) -- Every 5 minutes
     end
+end
+
+--// GUI Elements - Main Tab
+MainTab:AddToggle({
+    Name = "🔥 Enable Auto Fish",
+    Default = false,
+    Callback = function(Value)
+        getgenv().Settings.AutoFish = Value
+        if Value then
+            task.spawn(AutoFish)
+        end
+    end
+})
+
+MainTab:AddToggle({
+    Name = "⚡ Perfect Cast (Max Power)",
+    Default = false,
+    Callback = function(Value)
+        getgenv().Settings.PerfectCast = Value
+    end
+})
+
+MainTab:AddToggle({
+    Name = "💫 Instant Catch",
+    Default = false,
+    Callback = function(Value)
+        getgenv().Settings.InstantCatch = Value
+    end
+})
+
+MainTab:AddToggle({
+    Name = "🎣 Auto Equip Best Rod",
+    Default = false,
+    Callback = function(Value)
+        getgenv().Settings.AutoEquipBestRod = Value
+        if Value then
+            EquipBestRod()
+        end
+    end
+})
+
+--// Auto Farm Tab
+AutoFarmTab:AddToggle({
+    Name = "💰 Auto Sell Fish",
+    Default = false,
+    Callback = function(Value)
+        getgenv().Settings.AutoSell = Value
+        if Value then
+            task.spawn(AutoSell)
+        end
+    end
+})
+
+AutoFarmTab:AddSlider({
+    Name = "Sell Interval (Seconds)",
+    Min = 5,
+    Max = 60,
+    Default = 10,
+    Color = Color3.fromRGB(255,255,255),
+    Increment = 5,
+    ValueName = "Seconds",
+    Callback = function(Value)
+        -- Update interval logic here
+    end
+})
+
+AutoFarmTab:AddToggle({
+    Name = "🛒 Auto Buy (Rods/Bait)",
+    Default = false,
+    Callback = function(Value)
+        getgenv().Settings.AutoBuy = Value
+        if Value then
+            task.spawn(AutoBuy)
+        end
+    end
+})
+
+--// Teleport Tab
+local Islands = {
+    ["Fisherman Island (Spawn)"] = CFrame.new(0, 10, 0),
+    ["Kohana"] = CFrame.new(500, 10, 500),
+    ["Coral Reef"] = CFrame.new(-500, 10, 300),
+    ["Esoteric Depths"] = CFrame.new(1000, -50, 1000),
+    ["Open Ocean"] = CFrame.new(0, 0, 2000)
+}
+
+for IslandName, Pos in pairs(Islands) do
+    TeleportTab:AddButton({
+        Name = "🏝️ Teleport to " .. IslandName,
+        Callback = function()
+            TeleportTo(Pos)
+            Library:MakeNotification({
+                Name = "Teleport",
+                Content = "Teleported to " .. IslandName,
+                Image = "rbxassetid://4483345998",
+                Time = 3
+            })
+        end
+    })
+end
+
+--// Misc Tab
+MiscTab:AddToggle({
+    Name = "🛡️ Anti-AFK",
+    Default = false,
+    Callback = function(Value)
+        getgenv().Settings.AntiAFK = Value
+        if Value then
+            task.spawn(AntiAFK)
+        end
+    end
+})
+
+MiscTab:AddSlider({
+    Name = "WalkSpeed",
+    Min = 16,
+    Max = 100,
+    Default = 16,
+    Color = Color3.fromRGB(255,255,255),
+    Increment = 1,
+    ValueName = "Speed",
+    Callback = function(Value)
+        getgenv().Settings.WalkSpeed = Value
+        if Humanoid then
+            Humanoid.WalkSpeed = Value
+        end
+    end
+})
+
+MiscTab:AddSlider({
+    Name = "JumpPower",
+    Min = 50,
+    Max = 200,
+    Default = 50,
+    Color = Color3.fromRGB(255,255,255),
+    Increment = 10,
+    ValueName = "Power",
+    Callback = function(Value)
+        getgenv().Settings.JumpPower = Value
+        if Humanoid then
+            Humanoid.JumpPower = Value
+        end
+    end
+})
+
+MiscTab:AddButton({
+    Name = "💾 Save Configuration",
+    Callback = function()
+        Library:SaveConfig("FishIt_AutoConfig")
+        Library:MakeNotification({
+            Name = "Config Saved",
+            Content = "Settings saved successfully!",
+            Image = "rbxassetid://4483345998",
+            Time = 3
+        })
+    end
+})
+
+--// Character Added Event
+LocalPlayer.CharacterAdded:Connect(function(NewChar)
+    Character = NewChar
+    Humanoid = NewChar:WaitForChild("Humanoid")
+    HumanoidRootPart = NewChar:WaitForChild("HumanoidRootPart")
+    
+    -- Reapply settings
+    Humanoid.WalkSpeed = getgenv().Settings.WalkSpeed
+    Humanoid.JumpPower = getgenv().Settings.JumpPower
 end)
+
+--// Notification on Load
+Library:MakeNotification({
+    Name = "Fish It Script Loaded",
+    Content = "Made with 💙 | Auto Farm Ready",
+    Image = "rbxassetid://4483345998",
+    Time = 5
+})
+
+print([[
+    🎣 FISH IT AUTO FARM 🎣
+    =======================
+    Features Active:
+    - Auto Fish dengan Perfect Timing
+    - Instant Catch System
+    - Auto Sell & Auto Buy
+    - Teleport ke Semua Islands
+    - Anti-AFK Protection
+    
+    Gunakan dengan bijak!
+]])
