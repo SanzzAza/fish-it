@@ -1,52 +1,66 @@
 --[[
-    ╔═══════════════════════════════════════════╗
-    ║         AUTO FISH SCRIPT - FISCH          ║
-    ║            Versi Lengkap + GUI            ║
-    ╚═══════════════════════════════════════════╝
+    ╔═══════════════════════════════════════════════════╗
+    ║          AUTO FISH SCRIPT - FISH IT!              ║
+    ║              Versi Lengkap + GUI                  ║
+    ╚═══════════════════════════════════════════════════╝
     
+    Game: Fish It!
     Fitur:
     • Auto Cast (lempar kail otomatis)
-    • Auto Reel (tarik ikan otomatis)
-    • Auto Shake (goyang otomatis)
-    • Auto Perfect Catch
-    • GUI Toggle On/Off
+    • Auto Catch/Reel (tangkap ikan otomatis)
+    • Auto Minigame (selesaikan minigame otomatis)
+    • Auto Sell (jual ikan otomatis) [Optional]
+    • GUI dengan Toggle
+    • Fish Counter
     
-    Executor: Fluxus, Delta, Synapse, Arceus X, dll
+    Executor: Delta, Fluxus, Arceus X, Hydrogen, dll
 ]]
 
--- Services
+-- ═══════════════════════════════════════
+--              SERVICES
+-- ═══════════════════════════════════════
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+local VirtualUser = game:GetService("VirtualUser")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 
 -- Variables
 local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
 local mouse = player:GetMouse()
+local character = player.Character or player.CharacterAdded:Wait()
 
 -- Settings
 local Settings = {
     AutoFish = false,
-    AutoShake = true,
-    AutoReel = true,
-    CastDelay = 0.5,
-    ReelDelay = 0.1
+    AutoMinigame = true,
+    AutoSell = false,
+    CastPower = 100, -- 0-100
+    Delay = 0.3
 }
 
---[[ ══════════════════════════════════════
-         MEMBUAT GUI (User Interface)
-══════════════════════════════════════ ]]
+-- Stats
+local Stats = {
+    FishCaught = 0,
+    FishSold = 0,
+    SessionTime = 0
+}
 
--- Hapus GUI lama jika ada
-if game.CoreGui:FindFirstChild("AutoFishGUI") then
-    game.CoreGui:FindFirstChild("AutoFishGUI"):Destroy()
+-- ═══════════════════════════════════════
+--         HAPUS GUI LAMA
+-- ═══════════════════════════════════════
+if game.CoreGui:FindFirstChild("FishItAutoGUI") then
+    game.CoreGui:FindFirstChild("FishItAutoGUI"):Destroy()
 end
 
--- Buat ScreenGui
+-- ═══════════════════════════════════════
+--           BUAT GUI UTAMA
+-- ═══════════════════════════════════════
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "AutoFishGUI"
+ScreenGui.Name = "FishItAutoGUI"
 ScreenGui.Parent = game.CoreGui
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.ResetOnSpawn = false
@@ -55,254 +69,400 @@ ScreenGui.ResetOnSpawn = false
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.Parent = ScreenGui
-MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 25, 40)
 MainFrame.BorderSizePixel = 0
-MainFrame.Position = UDim2.new(0.02, 0, 0.3, 0)
-MainFrame.Size = UDim2.new(0, 220, 0, 280)
+MainFrame.Position = UDim2.new(0.02, 0, 0.25, 0)
+MainFrame.Size = UDim2.new(0, 240, 0, 340)
 MainFrame.Active = true
 MainFrame.Draggable = true
 
--- Corner untuk Main Frame
-local UICorner = Instance.new("UICorner")
-UICorner.CornerRadius = UDim.new(0, 10)
-UICorner.Parent = MainFrame
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 12)
+MainCorner.Parent = MainFrame
 
--- Stroke/Border
+-- Gradient Background
+local UIGradient = Instance.new("UIGradient")
+UIGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(20, 30, 50)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(10, 15, 30))
+})
+UIGradient.Rotation = 45
+UIGradient.Parent = MainFrame
+
+-- Glowing Border
 local UIStroke = Instance.new("UIStroke")
-UIStroke.Color = Color3.fromRGB(0, 170, 255)
+UIStroke.Color = Color3.fromRGB(0, 150, 255)
 UIStroke.Thickness = 2
+UIStroke.Transparency = 0.3
 UIStroke.Parent = MainFrame
 
--- Title Bar
+-- ═══════════════════════════════════════
+--              TITLE BAR
+-- ═══════════════════════════════════════
 local TitleBar = Instance.new("Frame")
 TitleBar.Name = "TitleBar"
 TitleBar.Parent = MainFrame
-TitleBar.BackgroundColor3 = Color3.fromRGB(0, 120, 200)
+TitleBar.BackgroundColor3 = Color3.fromRGB(0, 100, 180)
 TitleBar.BorderSizePixel = 0
-TitleBar.Size = UDim2.new(1, 0, 0, 35)
+TitleBar.Size = UDim2.new(1, 0, 0, 40)
 
 local TitleCorner = Instance.new("UICorner")
-TitleCorner.CornerRadius = UDim.new(0, 10)
+TitleCorner.CornerRadius = UDim.new(0, 12)
 TitleCorner.Parent = TitleBar
 
--- Title Text
+-- Fix corner overlap
+local TitleFix = Instance.new("Frame")
+TitleFix.Parent = TitleBar
+TitleFix.BackgroundColor3 = Color3.fromRGB(0, 100, 180)
+TitleFix.BorderSizePixel = 0
+TitleFix.Position = UDim2.new(0, 0, 0.5, 0)
+TitleFix.Size = UDim2.new(1, 0, 0.5, 0)
+
+-- Title Icon & Text
 local TitleText = Instance.new("TextLabel")
 TitleText.Parent = TitleBar
 TitleText.BackgroundTransparency = 1
-TitleText.Position = UDim2.new(0, 10, 0, 0)
-TitleText.Size = UDim2.new(1, -20, 1, 0)
-TitleText.Font = Enum.Font.GothamBold
-TitleText.Text = "🎣 AUTO FISH"
+TitleText.Position = UDim2.new(0, 15, 0, 0)
+TitleText.Size = UDim2.new(1, -60, 1, 0)
+TitleText.Font = Enum.Font.GothamBlack
+TitleText.Text = "🎣 FISH IT! AUTO"
 TitleText.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleText.TextSize = 16
 TitleText.TextXAlignment = Enum.TextXAlignment.Left
 
+-- Minimize Button
+local MinimizeBtn = Instance.new("TextButton")
+MinimizeBtn.Parent = TitleBar
+MinimizeBtn.BackgroundColor3 = Color3.fromRGB(255, 180, 0)
+MinimizeBtn.Position = UDim2.new(1, -60, 0.5, -10)
+MinimizeBtn.Size = UDim2.new(0, 20, 0, 20)
+MinimizeBtn.Font = Enum.Font.GothamBold
+MinimizeBtn.Text = "−"
+MinimizeBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
+MinimizeBtn.TextSize = 16
+
+local MinCorner = Instance.new("UICorner")
+MinCorner.CornerRadius = UDim.new(0, 5)
+MinCorner.Parent = MinimizeBtn
+
 -- Close Button
-local CloseButton = Instance.new("TextButton")
-CloseButton.Parent = TitleBar
-CloseButton.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
-CloseButton.Position = UDim2.new(1, -30, 0.5, -10)
-CloseButton.Size = UDim2.new(0, 20, 0, 20)
-CloseButton.Font = Enum.Font.GothamBold
-CloseButton.Text = "X"
-CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-CloseButton.TextSize = 12
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Parent = TitleBar
+CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+CloseBtn.Position = UDim2.new(1, -32, 0.5, -10)
+CloseBtn.Size = UDim2.new(0, 20, 0, 20)
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.Text = "✕"
+CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseBtn.TextSize = 12
 
 local CloseCorner = Instance.new("UICorner")
 CloseCorner.CornerRadius = UDim.new(0, 5)
-CloseCorner.Parent = CloseButton
+CloseCorner.Parent = CloseBtn
 
---[[ ══════════════════════════════════════
-              FUNGSI BUAT TOMBOL
-══════════════════════════════════════ ]]
+-- ═══════════════════════════════════════
+--           CONTENT FRAME
+-- ═══════════════════════════════════════
+local ContentFrame = Instance.new("Frame")
+ContentFrame.Name = "Content"
+ContentFrame.Parent = MainFrame
+ContentFrame.BackgroundTransparency = 1
+ContentFrame.Position = UDim2.new(0, 0, 0, 45)
+ContentFrame.Size = UDim2.new(1, 0, 1, -45)
 
-local function CreateToggleButton(name, posY, default, callback)
-    local Button = Instance.new("TextButton")
-    Button.Name = name
-    Button.Parent = MainFrame
-    Button.BackgroundColor3 = default and Color3.fromRGB(0, 180, 100) or Color3.fromRGB(80, 80, 90)
-    Button.Position = UDim2.new(0.05, 0, 0, posY)
-    Button.Size = UDim2.new(0.9, 0, 0, 35)
-    Button.Font = Enum.Font.GothamSemibold
-    Button.Text = name .. ": " .. (default and "ON" or "OFF")
-    Button.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Button.TextSize = 14
+-- ═══════════════════════════════════════
+--            STATUS SECTION
+-- ═══════════════════════════════════════
+local StatusFrame = Instance.new("Frame")
+StatusFrame.Parent = ContentFrame
+StatusFrame.BackgroundColor3 = Color3.fromRGB(30, 35, 55)
+StatusFrame.Position = UDim2.new(0.05, 0, 0, 5)
+StatusFrame.Size = UDim2.new(0.9, 0, 0, 50)
+
+local StatusCorner = Instance.new("UICorner")
+StatusCorner.CornerRadius = UDim.new(0, 8)
+StatusCorner.Parent = StatusFrame
+
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Parent = StatusFrame
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Size = UDim2.new(1, 0, 0.5, 0)
+StatusLabel.Font = Enum.Font.GothamSemibold
+StatusLabel.Text = "⏸️ Status: Idle"
+StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
+StatusLabel.TextSize = 13
+
+local CounterLabel = Instance.new("TextLabel")
+CounterLabel.Parent = StatusFrame
+CounterLabel.BackgroundTransparency = 1
+CounterLabel.Position = UDim2.new(0, 0, 0.5, 0)
+CounterLabel.Size = UDim2.new(1, 0, 0.5, 0)
+CounterLabel.Font = Enum.Font.GothamBold
+CounterLabel.Text = "🐟 Fish Caught: 0"
+CounterLabel.TextColor3 = Color3.fromRGB(100, 255, 150)
+CounterLabel.TextSize = 14
+
+-- ═══════════════════════════════════════
+--         FUNGSI BUAT TOGGLE
+-- ═══════════════════════════════════════
+local buttonY = 60
+
+local function CreateToggle(name, icon, default, callback)
+    local ToggleFrame = Instance.new("Frame")
+    ToggleFrame.Parent = ContentFrame
+    ToggleFrame.BackgroundColor3 = Color3.fromRGB(35, 40, 60)
+    ToggleFrame.Position = UDim2.new(0.05, 0, 0, buttonY)
+    ToggleFrame.Size = UDim2.new(0.9, 0, 0, 38)
+    
+    local ToggleCorner = Instance.new("UICorner")
+    ToggleCorner.CornerRadius = UDim.new(0, 8)
+    ToggleCorner.Parent = ToggleFrame
+    
+    local ToggleLabel = Instance.new("TextLabel")
+    ToggleLabel.Parent = ToggleFrame
+    ToggleLabel.BackgroundTransparency = 1
+    ToggleLabel.Position = UDim2.new(0, 10, 0, 0)
+    ToggleLabel.Size = UDim2.new(0.65, 0, 1, 0)
+    ToggleLabel.Font = Enum.Font.GothamSemibold
+    ToggleLabel.Text = icon .. " " .. name
+    ToggleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ToggleLabel.TextSize = 13
+    ToggleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local ToggleBtn = Instance.new("TextButton")
+    ToggleBtn.Parent = ToggleFrame
+    ToggleBtn.BackgroundColor3 = default and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(100, 100, 110)
+    ToggleBtn.Position = UDim2.new(0.72, 0, 0.15, 0)
+    ToggleBtn.Size = UDim2.new(0.23, 0, 0.7, 0)
+    ToggleBtn.Font = Enum.Font.GothamBold
+    ToggleBtn.Text = default and "ON" or "OFF"
+    ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ToggleBtn.TextSize = 12
     
     local BtnCorner = Instance.new("UICorner")
-    BtnCorner.CornerRadius = UDim.new(0, 8)
-    BtnCorner.Parent = Button
+    BtnCorner.CornerRadius = UDim.new(0, 6)
+    BtnCorner.Parent = ToggleBtn
     
     local isOn = default
     
-    Button.MouseButton1Click:Connect(function()
+    ToggleBtn.MouseButton1Click:Connect(function()
         isOn = not isOn
-        Button.Text = name .. ": " .. (isOn and "ON" or "OFF")
-        Button.BackgroundColor3 = isOn and Color3.fromRGB(0, 180, 100) or Color3.fromRGB(80, 80, 90)
+        ToggleBtn.Text = isOn and "ON" or "OFF"
+        
+        -- Animate color change
+        TweenService:Create(ToggleBtn, TweenInfo.new(0.2), {
+            BackgroundColor3 = isOn and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(100, 100, 110)
+        }):Play()
+        
         callback(isOn)
     end)
     
-    return Button
+    buttonY = buttonY + 45
+    return ToggleBtn
 end
-
--- Buat Status Label
-local StatusLabel = Instance.new("TextLabel")
-StatusLabel.Parent = MainFrame
-StatusLabel.BackgroundTransparency = 1
-StatusLabel.Position = UDim2.new(0, 0, 0, 45)
-StatusLabel.Size = UDim2.new(1, 0, 0, 25)
-StatusLabel.Font = Enum.Font.GothamSemibold
-StatusLabel.Text = "Status: Idle"
-StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
-StatusLabel.TextSize = 12
 
 -- Buat Toggle Buttons
-CreateToggleButton("Auto Fish", 80, false, function(state)
+CreateToggle("Auto Fish", "🎣", false, function(state)
     Settings.AutoFish = state
-    StatusLabel.Text = state and "Status: Fishing..." or "Status: Idle"
-end)
-
-CreateToggleButton("Auto Shake", 125, true, function(state)
-    Settings.AutoShake = state
-end)
-
-CreateToggleButton("Auto Reel", 170, true, function(state)
-    Settings.AutoReel = state
-end)
-
--- Info Label
-local InfoLabel = Instance.new("TextLabel")
-InfoLabel.Parent = MainFrame
-InfoLabel.BackgroundTransparency = 1
-InfoLabel.Position = UDim2.new(0, 0, 1, -35)
-InfoLabel.Size = UDim2.new(1, 0, 0, 30)
-InfoLabel.Font = Enum.Font.Gotham
-InfoLabel.Text = "Tekan F6 untuk Hide/Show"
-InfoLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
-InfoLabel.TextSize = 11
-
--- Fish Counter
-local FishCount = 0
-local CounterLabel = Instance.new("TextLabel")
-CounterLabel.Parent = MainFrame
-CounterLabel.BackgroundTransparency = 1
-CounterLabel.Position = UDim2.new(0, 0, 0, 215)
-CounterLabel.Size = UDim2.new(1, 0, 0, 25)
-CounterLabel.Font = Enum.Font.GothamBold
-CounterLabel.Text = "🐟 Ikan Ditangkap: 0"
-CounterLabel.TextColor3 = Color3.fromRGB(0, 255, 150)
-CounterLabel.TextSize = 14
-
---[[ ══════════════════════════════════════
-            FUNGSI AUTO FISHING
-══════════════════════════════════════ ]]
-
--- Fungsi Cast (Lempar Kail)
-local function Cast()
-    -- Cari remote untuk cast
-    local remotes = ReplicatedStorage:FindFirstChild("events") or ReplicatedStorage
-    
-    -- Method 1: Simulasi Mouse Click
-    local function mouseClick()
-        VirtualInputManager:SendMouseButtonEvent(
-            mouse.X, 
-            mouse.Y, 
-            0, -- Left click
-            true, 
-            game, 
-            1
-        )
-        wait(0.05)
-        VirtualInputManager:SendMouseButtonEvent(
-            mouse.X, 
-            mouse.Y, 
-            0, 
-            false, 
-            game, 
-            1
-        )
+    if state then
+        StatusLabel.Text = "▶️ Status: Active"
+        StatusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+    else
+        StatusLabel.Text = "⏸️ Status: Idle"
+        StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
     end
+end)
+
+CreateToggle("Auto Minigame", "🎮", true, function(state)
+    Settings.AutoMinigame = state
+end)
+
+CreateToggle("Auto Sell", "💰", false, function(state)
+    Settings.AutoSell = state
+end)
+
+-- ═══════════════════════════════════════
+--           INFO SECTION
+-- ═══════════════════════════════════════
+local InfoFrame = Instance.new("Frame")
+InfoFrame.Parent = ContentFrame
+InfoFrame.BackgroundColor3 = Color3.fromRGB(25, 30, 45)
+InfoFrame.Position = UDim2.new(0.05, 0, 0, buttonY + 10)
+InfoFrame.Size = UDim2.new(0.9, 0, 0, 55)
+
+local InfoCorner = Instance.new("UICorner")
+InfoCorner.CornerRadius = UDim.new(0, 8)
+InfoCorner.Parent = InfoFrame
+
+local InfoText = Instance.new("TextLabel")
+InfoText.Parent = InfoFrame
+InfoText.BackgroundTransparency = 1
+InfoText.Size = UDim2.new(1, 0, 1, 0)
+InfoText.Font = Enum.Font.Gotham
+InfoText.Text = "📌 Hotkeys:\nF5 = Toggle Auto Fish\nF6 = Hide/Show GUI"
+InfoText.TextColor3 = Color3.fromRGB(180, 180, 200)
+InfoText.TextSize = 11
+InfoText.TextYAlignment = Enum.TextYAlignment.Center
+
+-- Credits
+local CreditsLabel = Instance.new("TextLabel")
+CreditsLabel.Parent = ContentFrame
+CreditsLabel.BackgroundTransparency = 1
+CreditsLabel.Position = UDim2.new(0, 0, 1, -20)
+CreditsLabel.Size = UDim2.new(1, 0, 0, 20)
+CreditsLabel.Font = Enum.Font.Gotham
+CreditsLabel.Text = "Fish It! Auto v1.0"
+CreditsLabel.TextColor3 = Color3.fromRGB(100, 100, 120)
+CreditsLabel.TextSize = 10
+
+-- ═══════════════════════════════════════
+--         FISHING FUNCTIONS
+-- ═══════════════════════════════════════
+
+-- Cari Remotes
+local function FindRemotes()
+    local remotes = {}
     
-    -- Method 2: Cari dan fire remote
     pcall(function()
-        for _, remote in pairs(remotes:GetDescendants()) do
-            if remote:IsA("RemoteEvent") then
-                if remote.Name:lower():find("cast") or 
-                   remote.Name:lower():find("throw") or
-                   remote.Name:lower():find("fish") then
-                    remote:FireServer()
+        -- Cari di ReplicatedStorage
+        for _, obj in pairs(ReplicatedStorage:GetDescendants()) do
+            if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+                local name = obj.Name:lower()
+                if name:find("cast") or name:find("throw") or name:find("rod") then
+                    remotes.Cast = obj
+                elseif name:find("reel") or name:find("catch") or name:find("pull") then
+                    remotes.Reel = obj
+                elseif name:find("shake") or name:find("hook") then
+                    remotes.Shake = obj
+                elseif name:find("sell") then
+                    remotes.Sell = obj
+                elseif name:find("minigame") or name:find("game") then
+                    remotes.Minigame = obj
                 end
             end
         end
     end)
     
-    mouseClick()
+    return remotes
 end
 
--- Fungsi Shake (Goyang)
-local function Shake()
+local Remotes = FindRemotes()
+
+-- Fungsi Cast Rod
+local function CastRod()
     pcall(function()
-        local remotes = ReplicatedStorage:FindFirstChild("events") or ReplicatedStorage
-        
-        for _, remote in pairs(remotes:GetDescendants()) do
-            if remote:IsA("RemoteEvent") then
-                if remote.Name:lower():find("shake") or 
-                   remote.Name:lower():find("pull") or
-                   remote.Name:lower():find("reel") then
-                    remote:FireServer()
-                end
+        -- Method 1: Fire Remote
+        if Remotes.Cast then
+            if Remotes.Cast:IsA("RemoteEvent") then
+                Remotes.Cast:FireServer()
+            elseif Remotes.Cast:IsA("RemoteFunction") then
+                Remotes.Cast:InvokeServer()
             end
         end
         
-        -- Simulasi keyboard press
-        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
-        wait(0.05)
-        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
-    end)
-end
-
--- Fungsi Reel (Tarik)
-local function Reel()
-    pcall(function()
-        local remotes = ReplicatedStorage:FindFirstChild("events") or ReplicatedStorage
-        
-        for _, remote in pairs(remotes:GetDescendants()) do
-            if remote:IsA("RemoteEvent") then
-                if remote.Name:lower():find("reel") or 
-                   remote.Name:lower():find("catch") or
-                   remote.Name:lower():find("collect") then
-                    remote:FireServer()
-                end
-            end
-        end
-        
-        -- Mouse click untuk reel
+        -- Method 2: Simulasi Mouse Hold & Release (untuk power bar)
         VirtualInputManager:SendMouseButtonEvent(mouse.X, mouse.Y, 0, true, game, 1)
-        wait(0.1)
+        wait(0.8) -- Hold untuk power
         VirtualInputManager:SendMouseButtonEvent(mouse.X, mouse.Y, 0, false, game, 1)
+    end)
+end
+
+-- Fungsi Auto Minigame
+local function DoMinigame()
+    pcall(function()
+        -- Cari minigame UI
+        for _, gui in pairs(playerGui:GetDescendants()) do
+            -- Cari button atau area yang perlu diklik
+            if gui:IsA("TextButton") or gui:IsA("ImageButton") then
+                local name = gui.Name:lower()
+                if (name:find("catch") or name:find("reel") or name:find("pull") or name:find("click")) and gui.Visible then
+                    -- Klik button
+                    firesignal(gui.MouseButton1Click)
+                end
+            end
+            
+            -- Untuk minigame dengan bar/slider
+            if gui:IsA("Frame") and gui.Name:lower():find("bar") then
+                if gui.Visible then
+                    -- Simulasi klik
+                    VirtualInputManager:SendMouseButtonEvent(mouse.X, mouse.Y, 0, true, game, 1)
+                    wait(0.05)
+                    VirtualInputManager:SendMouseButtonEvent(mouse.X, mouse.Y, 0, false, game, 1)
+                end
+            end
+        end
+        
+        -- Fire minigame remote jika ada
+        if Remotes.Minigame then
+            if Remotes.Minigame:IsA("RemoteEvent") then
+                Remotes.Minigame:FireServer()
+            end
+        end
+        
+        if Remotes.Reel then
+            if Remotes.Reel:IsA("RemoteEvent") then
+                Remotes.Reel:FireServer()
+            end
+        end
+        
+        -- Spam klik untuk minigame
+        for i = 1, 3 do
+            VirtualInputManager:SendMouseButtonEvent(mouse.X, mouse.Y, 0, true, game, 1)
+            wait(0.03)
+            VirtualInputManager:SendMouseButtonEvent(mouse.X, mouse.Y, 0, false, game, 1)
+            wait(0.03)
+        end
+    end)
+end
+
+-- Fungsi Auto Sell
+local function SellFish()
+    pcall(function()
+        if Remotes.Sell then
+            if Remotes.Sell:IsA("RemoteEvent") then
+                Remotes.Sell:FireServer()
+            elseif Remotes.Sell:IsA("RemoteFunction") then
+                Remotes.Sell:InvokeServer()
+            end
+        end
+        
+        -- Cari NPC sell atau tombol sell
+        for _, gui in pairs(playerGui:GetDescendants()) do
+            if gui:IsA("TextButton") then
+                local text = gui.Text:lower()
+                if text:find("sell") and gui.Visible then
+                    firesignal(gui.MouseButton1Click)
+                    Stats.FishSold = Stats.FishSold + 1
+                end
+            end
+        end
     end)
 end
 
 -- Deteksi State Fishing
 local function GetFishingState()
-    local playerGui = player:FindFirstChild("PlayerGui")
-    if not playerGui then return "idle" end
-    
-    -- Cari UI fishing yang aktif
+    -- Cek apakah ada minigame aktif
     for _, gui in pairs(playerGui:GetDescendants()) do
-        if gui:IsA("Frame") or gui:IsA("ImageLabel") then
+        if gui:IsA("Frame") or gui:IsA("ScreenGui") then
             local name = gui.Name:lower()
-            if name:find("shake") or name:find("minigame") then
-                if gui.Visible then
-                    return "shaking"
-                end
-            elseif name:find("reel") or name:find("catch") then
-                if gui.Visible then
-                    return "reeling"
-                end
-            elseif name:find("wait") or name:find("bobber") then
-                if gui.Visible then
+            
+            if gui.Visible or (gui:IsA("ScreenGui") and gui.Enabled) then
+                if name:find("minigame") or name:find("catch") or name:find("reel") then
+                    return "minigame"
+                elseif name:find("wait") or name:find("bobber") or name:find("fishing") then
                     return "waiting"
                 end
+            end
+        end
+    end
+    
+    -- Cek berdasarkan tool/rod yang diequip
+    if character then
+        local tool = character:FindFirstChildOfClass("Tool")
+        if tool then
+            local name = tool.Name:lower()
+            if name:find("rod") or name:find("fish") then
+                return "ready"
             end
         end
     end
@@ -310,90 +470,138 @@ local function GetFishingState()
     return "idle"
 end
 
---[[ ══════════════════════════════════════
-              MAIN LOOP
-══════════════════════════════════════ ]]
+-- ═══════════════════════════════════════
+--            MAIN LOOPS
+-- ═══════════════════════════════════════
 
--- Auto Shake Loop
+-- Auto Fishing Loop
 spawn(function()
-    while wait(0.1) do
-        if Settings.AutoFish and Settings.AutoShake then
-            local state = GetFishingState()
-            if state == "shaking" then
-                Shake()
-                StatusLabel.Text = "Status: Shaking! 🎯"
-            end
-        end
-    end
-end)
-
--- Auto Reel Loop  
-spawn(function()
-    while wait(0.15) do
-        if Settings.AutoFish and Settings.AutoReel then
-            local state = GetFishingState()
-            if state == "reeling" then
-                Reel()
-                StatusLabel.Text = "Status: Reeling! 🐟"
-                FishCount = FishCount + 1
-                CounterLabel.Text = "🐟 Ikan Ditangkap: " .. FishCount
-            end
-        end
-    end
-end)
-
--- Main Auto Cast Loop
-spawn(function()
-    while wait(Settings.CastDelay) do
+    while wait(0.5) do
         if Settings.AutoFish then
             local state = GetFishingState()
-            if state == "idle" then
-                Cast()
-                StatusLabel.Text = "Status: Casting... 🎣"
-                wait(1)
-                StatusLabel.Text = "Status: Waiting... ⏳"
+            
+            if state == "idle" or state == "ready" then
+                StatusLabel.Text = "🎣 Status: Casting..."
+                CastRod()
+                wait(1.5)
+                StatusLabel.Text = "⏳ Status: Waiting..."
             end
         end
     end
 end)
 
---[[ ══════════════════════════════════════
-              HOTKEYS & EVENTS
-══════════════════════════════════════ ]]
+-- Auto Minigame Loop
+spawn(function()
+    while wait(0.1) do
+        if Settings.AutoFish and Settings.AutoMinigame then
+            local state = GetFishingState()
+            
+            if state == "minigame" then
+                StatusLabel.Text = "🎮 Status: Minigame!"
+                DoMinigame()
+                Stats.FishCaught = Stats.FishCaught + 1
+                CounterLabel.Text = "🐟 Fish Caught: " .. Stats.FishCaught
+            end
+        end
+    end
+end)
 
--- Toggle GUI dengan F6
+-- Auto Sell Loop
+spawn(function()
+    while wait(30) do -- Check setiap 30 detik
+        if Settings.AutoFish and Settings.AutoSell then
+            SellFish()
+        end
+    end
+end)
+
+-- Update Character Reference
+player.CharacterAdded:Connect(function(char)
+    character = char
+end)
+
+-- ═══════════════════════════════════════
+--              HOTKEYS
+-- ═══════════════════════════════════════
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
     
+    -- F5 = Toggle Auto Fish
+    if input.KeyCode == Enum.KeyCode.F5 then
+        Settings.AutoFish = not Settings.AutoFish
+        if Settings.AutoFish then
+            StatusLabel.Text = "▶️ Status: Active"
+            StatusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+        else
+            StatusLabel.Text = "⏸️ Status: Idle"
+            StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
+        end
+    end
+    
+    -- F6 = Toggle GUI
     if input.KeyCode == Enum.KeyCode.F6 then
         MainFrame.Visible = not MainFrame.Visible
     end
 end)
 
--- Close Button
-CloseButton.MouseButton1Click:Connect(function()
+-- ═══════════════════════════════════════
+--           BUTTON EVENTS
+-- ═══════════════════════════════════════
+
+-- Minimize
+local isMinimized = false
+MinimizeBtn.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    ContentFrame.Visible = not isMinimized
+    
+    TweenService:Create(MainFrame, TweenInfo.new(0.3), {
+        Size = isMinimized and UDim2.new(0, 240, 0, 40) or UDim2.new(0, 240, 0, 340)
+    }):Play()
+    
+    MinimizeBtn.Text = isMinimized and "+" or "−"
+end)
+
+-- Close
+CloseBtn.MouseButton1Click:Connect(function()
+    Settings.AutoFish = false
     ScreenGui:Destroy()
 end)
 
---[[ ══════════════════════════════════════
-              NOTIFIKASI
-══════════════════════════════════════ ]]
+-- ═══════════════════════════════════════
+--            NOTIFICATIONS
+-- ═══════════════════════════════════════
+pcall(function()
+    game.StarterGui:SetCore("SendNotification", {
+        Title = "🎣 Fish It! Auto",
+        Text = "Script loaded successfully!\nF5 = Toggle | F6 = Hide GUI",
+        Duration = 5,
+        Icon = "rbxassetid://6023426915"
+    })
+end)
 
--- Tampilkan notifikasi
-game.StarterGui:SetCore("SendNotification", {
-    Title = "🎣 Auto Fish Loaded!",
-    Text = "Script berhasil dijalankan!\nTekan F6 untuk Hide/Show GUI",
-    Duration = 5,
-    Icon = "rbxassetid://6023426915"
-})
-
+-- Print Info
 print([[
-╔═══════════════════════════════════════╗
-║     🎣 AUTO FISH SCRIPT LOADED! 🎣    ║
-╠═══════════════════════════════════════╣
-║  • Auto Fish: Toggle di GUI           ║
-║  • Auto Shake: ON                     ║
-║  • Auto Reel: ON                      ║
-║  • Hotkey: F6 (Hide/Show)             ║
-╚═══════════════════════════════════════╝
+╔═══════════════════════════════════════════╗
+║      🎣 FISH IT! AUTO FISH LOADED 🎣      ║
+╠═══════════════════════════════════════════╣
+║   Hotkeys:                                ║
+║   • F5 = Toggle Auto Fish                 ║
+║   • F6 = Hide/Show GUI                    ║
+║                                           ║
+║   Features:                               ║
+║   • Auto Cast                             ║
+║   • Auto Minigame                         ║
+║   • Auto Sell                             ║
+║   • Fish Counter                          ║
+╚═══════════════════════════════════════════╝
 ]])
+
+-- Anti AFK
+spawn(function()
+    while wait(60) do
+        pcall(function()
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton2(Vector2.new())
+        end)
+    end
+end)
