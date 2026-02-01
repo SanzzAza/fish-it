@@ -1,839 +1,646 @@
 -- ============================================
--- ROBLOX AUTO FISH SCRIPT (Lua - Untuk Executor)
+-- ROBLOX AUTO FISH SCRIPT (REVISI DETEKSI PANCINGAN)
 -- ============================================
--- Script ini untuk game fishing di Roblox
--- Harap gunakan dengan bijak dan bertanggung jawab
 
--- Nama Game yang Support: Fishing Simulator, Ro-Fishing, dll
--- Compatible dengan: Synapse X, KRNL, Script-Ware, dll
-
--- ============================================
--- KONFIGURASI
--- ============================================
 local Config = {
-    Enabled = true,               -- Aktif/Nonaktif auto fish
-    AutoCast = true,              -- Auto lempar kail
-    AutoReel = true,              -- Auto tarik ikan
-    AutoSell = false,             -- Auto jual ikan (jika ada fitur)
-    Delay = {                     -- Pengaturan delay
-        AfterCast = 2,            -- Delay setelah lempar kail (detik)
-        AfterBite = 0.5,          -- Delay setelah ikan menggigit (detik)
-        BetweenFish = 1,          -- Delay antara ikan (detik)
-        SellDelay = 3             -- Delay setelah jual (detik)
-    },
-    Notifications = true,         -- Tampilkan notifikasi
-    SoundAlert = false,           -- Bunyi alert (jika support)
-    AntiAFK = true,               -- Anti AFK system
-    DebugMode = false             -- Mode debug untuk testing
+    Enabled = true,
+    DebugMode = true, -- Aktifkan untuk melihat log deteksi
+    DetectionMethod = "Advanced" -- "Simple", "Advanced", atau "Universal"
 }
 
--- ============================================
--- VARIABEL GLOBAL
--- ============================================
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local Workspace = game:GetService("Workspace")
-local MarketplaceService = game:GetService("MarketplaceService")
-local TeleportService = game:GetService("TeleportService")
-
-local Fishing = {}
-local Connections = {}
-local IsFishing = false
-local LastActionTime = tick()
-local FishCaught = 0
-local StartTime = tick()
 
 -- ============================================
--- FUNGSI UTILITAS
+-- SISTEM DETEKSI PANCINGAN YANG LEBIH BAIK
 -- ============================================
+
 function notify(title, message, duration)
-    if Config.Notifications then
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = title,
-            Text = message,
-            Duration = duration or 5,
-            Icon = "rbxassetid://4483345998"
-        })
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = title,
+        Text = message,
+        Duration = duration or 5
+    })
+    print("[INFO] " .. title .. ": " .. message)
+end
+
+-- Fungsi utama deteksi pancingan
+function findFishingRod()
+    local rodFound = nil
+    
+    -- METHOD 1: Cari berdasarkan Tool/Model yang sedang dipegang
+    if LocalPlayer.Character then
+        -- Cek tangan kanan (RightHand)
+        local rightHand = LocalPlayer.Character:FindFirstChild("RightHand") or 
+                         LocalPlayer.Character:FindFirstChild("Right Arm") or
+                         LocalPlayer.Character:FindFirstChild("RightUpperArm")
+        
+        if rightHand then
+            for _, obj in pairs(rightHand:GetChildren()) do
+                if isFishingRodObject(obj) then
+                    rodFound = obj
+                    break
+                end
+            end
+        end
+        
+        -- Cek seluruh character
+        if not rodFound then
+            for _, obj in pairs(LocalPlayer.Character:GetDescendants()) do
+                if isFishingRodObject(obj) then
+                    rodFound = obj
+                    break
+                end
+            end
+        end
     end
+    
+    -- METHOD 2: Cari di Backpack/Inventory
+    if not rodFound then
+        local backpack = LocalPlayer:FindFirstChild("Backpack")
+        if backpack then
+            for _, tool in pairs(backpack:GetChildren()) do
+                if isFishingRodObject(tool) then
+                    rodFound = tool
+                    break
+                end
+            end
+        end
+    end
+    
+    -- METHOD 3: Cari di StarterGear/PlayerScripts
+    if not rodFound then
+        local starterGear = LocalPlayer:FindFirstChild("StarterGear")
+        if starterGear then
+            for _, tool in pairs(starterGear:GetChildren()) do
+                if isFishingRodObject(tool) then
+                    rodFound = tool
+                    break
+                end
+            end
+        end
+    end
+    
+    -- METHOD 4: Cari Tool yang sedang aktif
+    if not rodFound and LocalPlayer.Character then
+        local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            local activeTool = humanoid:FindFirstChildOfClass("Tool")
+            if activeTool and isFishingRodObject(activeTool) then
+                rodFound = activeTool
+            end
+        end
+    end
+    
+    -- Debug informasi
     if Config.DebugMode then
-        print("[DEBUG] " .. title .. ": " .. message)
+        if rodFound then
+            print("[DEBUG] Fishing Rod Ditemukan:")
+            print("  Nama: " .. rodFound.Name)
+            print("  Class: " .. rodFound.ClassName)
+            print("  Parent: " .. rodFound.Parent.Name)
+            
+            -- Tampilkan semua properti untuk debug
+            print("  Properties:")
+            for _, child in pairs(rodFound:GetChildren()) do
+                print("    - " .. child.Name .. " (" .. child.ClassName .. ")")
+            end
+        else
+            print("[DEBUG] Tidak menemukan fishing rod!")
+            
+            -- Debug: Tampilkan semua Tool di inventory
+            print("[DEBUG] Inventory check:")
+            local backpack = LocalPlayer:FindFirstChild("Backpack")
+            if backpack then
+                for _, tool in pairs(backpack:GetChildren()) do
+                    print("  - " .. tool.Name .. " (" .. tool.ClassName .. ")")
+                end
+            else
+                print("  Backpack tidak ditemukan!")
+            end
+            
+            -- Debug: Tampilkan semua objek di tangan
+            if LocalPlayer.Character then
+                print("[DEBUG] Character check:")
+                for _, part in pairs(LocalPlayer.Character:GetChildren()) do
+                    if part:IsA("Tool") or part:IsA("Model") then
+                        print("  - " .. part.Name .. " (" .. part.ClassName .. ")")
+                    end
+                end
+            end
+        end
     end
+    
+    return rodFound
 end
 
-function waitForChild(parent, childName, timeout)
-    timeout = timeout or 10
-    local startTime = tick()
-    while tick() - startTime < timeout do
-        local child = parent:FindFirstChild(childName)
-        if child then return child end
-        wait(0.1)
+-- Fungsi untuk mengecek apakah objek adalah pancingan
+function isFishingRodObject(obj)
+    local name = obj.Name:lower()
+    local className = obj.ClassName
+    
+    -- Keyword untuk pancingan
+    local fishingKeywords = {
+        "rod", "fishing", "pole", "hook", "line", 
+        "cast", "reel", "bait", "fish", "angler"
+    }
+    
+    -- Cek berdasarkan nama
+    for _, keyword in pairs(fishingKeywords) do
+        if string.find(name, keyword) then
+            return true
+        end
     end
-    return nil
-end
-
-function isGameLoaded()
-    return LocalPlayer and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    
+    -- Cek jika objek adalah Tool dengan handle/string
+    if className == "Tool" then
+        -- Cek jika ada Handle (standard Roblox tool)
+        local handle = obj:FindFirstChild("Handle")
+        if handle then
+            -- Cek jika ada part yang menyerupai tali/string
+            local stringParts = {"String", "Line", "Rope", "Wire"}
+            for _, partName in pairs(stringParts) do
+                if handle:FindFirstChild(partName) then
+                    return true
+                end
+            end
+            
+            -- Cek jika ada attachment untuk hook
+            local attachments = handle:GetChildren()
+            for _, attachment in pairs(attachments) do
+                if attachment:IsA("Attachment") then
+                    return true
+                end
+            end
+        end
+    end
+    
+    -- Cek jika ada remote events khusus fishing
+    local remoteEvents = {"Cast", "Reel", "Fish", "Bait", "Hook"}
+    for _, eventName in pairs(remoteEvents) do
+        if obj:FindFirstChild(eventName) then
+            return true
+        end
+    end
+    
+    -- Cek berdasarkan tag (jika game menggunakan CollectionService)
+    local CollectionService = game:GetService("CollectionService")
+    if CollectionService:HasTag(obj, "FishingRod") or 
+       CollectionService:HasTag(obj, "Rod") or
+       CollectionService:HasTag(obj, "Tool") then
+        return true
+    end
+    
+    return false
 end
 
 -- ============================================
--- FUNGSI DETEKSI GAME FISHING
+-- SISTEM DETEKSI OTOMATIS GAME
 -- ============================================
-function detectFishingGame()
-    local gameName = MarketplaceService:GetProductInfo(game.PlaceId).Name
-    notify("Auto Fish", "Memulai di: " .. gameName, 3)
+
+function detectGameType()
+    local placeId = game.PlaceId
+    local gameName = game:GetService("MarketplaceService"):GetProductInfo(placeId).Name
+    
+    print("[INFO] Game terdeteksi: " .. gameName)
     
     -- Deteksi game fishing populer
-    local gameSignatures = {
-        ["Fishing Simulator"] = {
-            rodName = "FishingRod",
-            waterName = "Water",
-            fishName = "Fish",
-            sellButton = "Sell"
+    local fishingGames = {
+        [189707] = { -- Fishing Simulator
+            name = "Fishing Simulator",
+            rodNames = {"FishingRod", "Fishing Pole", "Rod", "FishingRod_Mk1"},
+            castMethod = "RemoteEvent",
+            castEvent = "CastRod"
         },
-        ["Ro-Fishing"] = {
-            rodName = "FishingRod",
-            waterName = "Water",
-            fishName = "Fish",
-            sellButton = "SellButton"
+        [142823291] = { -- Ro-Fishing
+            name = "Ro-Fishing",
+            rodNames = {"FishingRod", "Rod"},
+            castMethod = "ClickDetector",
+            waterName = "Water"
         },
-        ["Fishing Empire"] = {
-            rodName = "Rod",
-            waterName = "Ocean",
-            fishName = "Catch",
-            sellButton = "Trade"
+        [537413528] = { -- Build A Boat For Treasure (ada fishing)
+            name = "Build A Boat For Treasure",
+            rodNames = {"Fishing Rod", "FishingPole"},
+            castMethod = "ToolActivate"
+        },
+        [292439477] = { -- Phantom Forces (bukan fishing, tapi contoh)
+            name = "Phantom Forces",
+            rodNames = {},
+            castMethod = "None"
         }
     }
     
-    for gamePattern, data in pairs(gameSignatures) do
-        if string.find(gameName:lower(), gamePattern:lower()) then
-            notify("Game Terdeteksi", "Menggunakan preset: " .. gamePattern, 3)
-            return data
+    -- Cari di database
+    if fishingGames[placeId] then
+        return fishingGames[placeId]
+    end
+    
+    -- Cari berdasarkan nama
+    for _, gameData in pairs(fishingGames) do
+        if string.find(gameName:lower(), gameData.name:lower()) then
+            return gameData
         end
     end
     
     -- Default detection
-    notify("Auto Fish", "Game tidak dikenal, menggunakan mode universal", 3)
     return {
-        rodName = "Rod",
-        waterName = "Water",
-        fishName = "Fish",
-        sellButton = "Sell"
+        name = "Universal Fishing Game",
+        rodNames = {"Rod", "FishingRod", "Fishing Pole", "Pole", "Fishing", "FishRod"},
+        castMethod = "AutoDetect"
     }
 end
 
-local GameData = detectFishingGame()
-
 -- ============================================
--- FUNGSI FISHING UTAMA
+-- FUNGSI CAST YANG LEBIH FLEXIBLE
 -- ============================================
-function findFishingRod()
-    if LocalPlayer.Character then
-        -- Cari di backpack
-        local backpack = LocalPlayer:FindFirstChild("Backpack")
-        if backpack then
-            for _, item in pairs(backpack:GetChildren()) do
-                if string.find(item.Name:lower(), GameData.rodName:lower()) or 
-                   string.find(item.Name:lower(), "rod") or
-                   string.find(item.Name:lower(), "fishing") then
-                    return item
-                end
-            end
-        end
-        
-        -- Cari di tangan character
-        for _, item in pairs(LocalPlayer.Character:GetChildren()) do
-            if string.find(item.Name:lower(), GameData.rodName:lower()) or 
-               string.find(item.Name:lower(), "rod") then
-                return item
-            end
-        end
-    end
-    return nil
-end
 
-function findWater()
-    for _, obj in pairs(Workspace:GetChildren()) do
-        if obj.Name:lower():find(GameData.waterName:lower()) or 
-           obj.Name:lower():find("water") or 
-           obj.Name:lower():find("sea") or 
-           obj.Name:lower():find("ocean") or 
-           obj.Name:lower():find("lake") or
-           obj.ClassName == "Part" and (obj.Material == Enum.Material.Water or obj.BrickColor == BrickColor.new("Bright blue")) then
-            return obj
-        end
-    end
-    return nil
-end
-
-function castRod()
-    if not Config.AutoCast then return false end
-    
+function castRodAdvanced()
     local rod = findFishingRod()
+    
     if not rod then
-        notify("Error", "Tidak menemukan pancingan", 3)
+        notify("Error", "Tidak menemukan pancingan!", 3)
+        
+        -- Coba cari ulang dengan method berbeda
+        print("[RETRY] Mencari pancingan dengan method alternatif...")
         return false
     end
     
-    -- Simulasi klik/tombol cast
-    local humanoid = LocalPlayer.Character:FindFirstChild("Humanoid")
-    if humanoid then
-        -- Coba berbagai metode cast
-        local success = false
-        
+    notify("Success", "Pancingan ditemukan: " .. rod.Name, 2)
+    
+    -- Coba berbagai metode cast
+    local castMethods = {
         -- Method 1: Activate tool
-        if rod:IsA("Tool") then
-            rod:Activate()
-            success = true
-        end
-        
-        -- Method 2: Fire remote event
-        local remotes = {"CastRod", "StartFishing", "FishCast", "FishingCast"}
-        for _, remoteName in pairs(remotes) do
-            local remote = rod:FindFirstChild(remoteName) or 
-                          Workspace:FindFirstChild(remoteName) or
-                          game.ReplicatedStorage:FindFirstChild(remoteName)
-            
-            if remote and remote:IsA("RemoteEvent") then
-                remote:FireServer()
-                success = true
-                break
-            elseif remote and remote:IsA("RemoteFunction") then
-                remote:InvokeServer()
-                success = true
-                break
-            end
-        end
-        
-        -- Method 3: Click on water
-        if not success then
-            local water = findWater()
-            if water then
-                fireclickdetector(water:FindFirstChildOfClass("ClickDetector"), 0)
-                success = true
-            end
-        end
-        
-        if success then
-            notify("Memancing", "Kail dilempar...", 2)
-            LastActionTime = tick()
-            return true
-        end
-    end
-    
-    return false
-end
-
-function detectFishBite()
-    -- Method 1: Deteksi perubahan warna/visual
-    local screenGui = LocalPlayer:FindFirstChild("PlayerGui")
-    if screenGui then
-        for _, gui in pairs(screenGui:GetChildren()) do
-            if gui:IsA("ScreenGui") then
-                -- Cari indikator ikan menggigit
-                local indicators = {"Bite", "Pull", "Fish", "Catch", "Reel", "!"}
-                for _, indicator in pairs(indicators) do
-                    local element = gui:FindFirstChild(indicator, true)
-                    if element and element:IsA("TextLabel") and element.Visible then
-                        return true
-                    elseif element and element:IsA("ImageLabel") and element.Visible then
-                        return true
-                    elseif element and element:IsA("Frame") and element.Visible then
-                        return true
-                    end
-                end
-            end
-        end
-    end
-    
-    -- Method 2: Deteksi suara (jika ada)
-    local sounds = {"BiteSound", "FishBite", "PullSound"}
-    for _, soundName in pairs(sounds) do
-        local sound = Workspace:FindFirstChild(soundName) or 
-                     game.ReplicatedStorage:FindFirstChild(soundName)
-        if sound and sound:IsA("Sound") and sound.Playing then
-            return true
-        end
-    end
-    
-    -- Method 3: Deteksi partikel/efek visual
-    if LocalPlayer.Character then
-        local rod = findFishingRod()
-        if rod then
-            for _, effect in pairs(rod:GetDescendants()) do
-                if (effect:IsA("ParticleEmitter") and effect.Enabled) or
-                   (effect:IsA("BillboardGui") and effect.Visible) then
-                    return true
-                end
-            end
-        end
-    end
-    
-    return false
-end
-
-function reelFish()
-    if not Config.AutoReel then return false end
-    
-    -- Coba berbagai metode reel
-    local methods = {
-        -- Method 1: Tekan tombol reel (E, F, R, atau Spasi)
         function()
-            local keys = {Enum.KeyCode.E, Enum.KeyCode.F, Enum.KeyCode.R, Enum.KeyCode.Space}
-            for _, key in pairs(keys) do
-                game:GetService("VirtualInputManager"):SendKeyEvent(true, key, false, nil)
-                wait(0.05)
-                game:GetService("VirtualInputManager"):SendKeyEvent(false, key, false, nil)
+            if rod:IsA("Tool") then
+                rod:Activate()
+                return true, "Tool Activation"
             end
-            return true
+            return false
         end,
         
         -- Method 2: Fire remote event
         function()
-            local remotes = {"Reel", "CatchFish", "FishReel", "ReelFish"}
-            for _, remoteName in pairs(remotes) do
-                local remote = Workspace:FindFirstChild(remoteName) or 
-                              game.ReplicatedStorage:FindFirstChild(remoteName)
+            local remoteNames = {"Cast", "CastRod", "StartFishing", "Fish", "Fishing", "Use", "Activate"}
+            
+            for _, remoteName in pairs(remoteNames) do
+                local remote = rod:FindFirstChild(remoteName)
+                if not remote then
+                    -- Coba cari di parent atau workspace
+                    remote = rod.Parent:FindFirstChild(remoteName) or 
+                            workspace:FindFirstChild(remoteName) or
+                            game.ReplicatedStorage:FindFirstChild(remoteName)
+                end
                 
-                if remote and remote:IsA("RemoteEvent") then
-                    remote:FireServer()
-                    return true
-                elseif remote and remote:IsA("RemoteFunction") then
-                    remote:InvokeServer()
-                    return true
+                if remote then
+                    if remote:IsA("RemoteEvent") then
+                        remote:FireServer()
+                        return true, "RemoteEvent: " .. remote.Name
+                    elseif remote:IsA("RemoteFunction") then
+                        remote:InvokeServer()
+                        return true, "RemoteFunction: " .. remote.Name
+                    elseif remote:IsA("BindableEvent") then
+                        remote:Fire()
+                        return true, "BindableEvent: " .. remote.Name
+                    end
                 end
             end
             return false
         end,
         
-        -- Method 3: Click reel button di GUI
+        -- Method 3: ClickDetector (untuk game tertentu)
         function()
-            local screenGui = LocalPlayer:FindFirstChild("PlayerGui")
-            if screenGui then
-                local buttons = {"ReelButton", "CatchButton", "PullButton", "Button"}
-                for _, gui in pairs(screenGui:GetChildren()) do
-                    if gui:IsA("ScreenGui") then
-                        for _, btnName in pairs(buttons) do
-                            local button = gui:FindFirstChild(btnName, true)
-                            if button and button:IsA("TextButton") and button.Visible then
-                                firesignal(button.MouseButton1Click)
-                                return true
-                            elseif button and button:IsA("ImageButton") and button.Visible then
-                                firesignal(button.MouseButton1Click)
-                                return true
-                            end
-                        end
-                    end
+            local clickDetector = rod:FindFirstChildOfClass("ClickDetector")
+            if not clickDetector then
+                clickDetector = rod:FindFirstChild("ClickDetector")
+            end
+            
+            if clickDetector then
+                fireclickdetector(clickDetector)
+                return true, "ClickDetector"
+            end
+            return false
+        end,
+        
+        -- Method 4: Equip tool dulu (jika ada di backpack)
+        function()
+            if rod.Parent == LocalPlayer.Backpack then
+                -- Equip tool
+                LocalPlayer.Character:WaitForChild("Humanoid"):EquipTool(rod)
+                wait(0.5)
+                
+                -- Coba activate setelah equip
+                if rod:IsA("Tool") then
+                    rod:Activate()
+                    return true, "Equip + Activate"
                 end
+            end
+            return false
+        end,
+        
+        -- Method 5: Click pada water
+        function()
+            local water = findWater()
+            if water then
+                local waterClick = water:FindFirstChildOfClass("ClickDetector")
+                if waterClick then
+                    fireclickdetector(waterClick)
+                    return true, "Water ClickDetector"
+                end
+            end
+            return false
+        end,
+        
+        -- Method 6: Virtual input (simulasi klik mouse)
+        function()
+            local UserInputService = game:GetService("UserInputService")
+            
+            -- Simulasi mouse click
+            local mouseTarget = workspace:FindPartOnRay(Ray.new(
+                workspace.CurrentCamera.CFrame.Position,
+                workspace.CurrentCamera.CFrame.LookVector * 100
+            ))
+            
+            if mouseTarget then
+                mouse1click()
+                return true, "Virtual Mouse Click"
             end
             return false
         end
     }
     
-    for _, method in pairs(methods) do
-        if method() then
-            FishCaught = FishCaught + 1
-            notify("Berhasil!", "Ikan berhasil ditangkap! (" .. FishCaught .. ")", 2)
+    -- Coba semua metode
+    for i, method in pairs(castMethods) do
+        local success, methodName = method()
+        if success then
+            notify("Casting", "Berhasil menggunakan metode: " .. methodName, 2)
             return true
         end
-        wait(0.1)
+        wait(0.1) -- Delay antar percobaan
     end
     
+    notify("Error", "Gagal melempar kail dengan semua metode", 3)
     return false
 end
 
-function autoSell()
-    if not Config.AutoSell then return end
+-- Fungsi bantu untuk mencari air
+function findWater()
+    local waterClasses = {
+        "Part", "MeshPart", "UnionOperation", "Model"
+    }
     
-    -- Cari NPC atau tempat jual
-    local sellAreas = {"Sell", "Market", "Shop", "Store", "Trader"}
-    for _, areaName in pairs(sellAreas) do
-        local sellPart = Workspace:FindFirstChild(areaName)
-        if sellPart then
-            local clickDetector = sellPart:FindFirstChildOfClass("ClickDetector")
-            if clickDetector then
-                fireclickdetector(clickDetector, 0)
-                notify("Auto Sell", "Menjual ikan...", 3)
-                wait(Config.Delay.SellDelay)
-                
-                -- Coba klik semua button jual di GUI
-                local screenGui = LocalPlayer:FindFirstChild("PlayerGui")
-                if screenGui then
-                    for _, gui in pairs(screenGui:GetChildren()) do
-                        if gui:IsA("ScreenGui") then
-                            local sellButtons = {"SellAll", "Sell", "Confirm", "Yes"}
-                            for _, btnName in pairs(sellButtons) do
-                                local button = gui:FindFirstChild(btnName, true)
-                                if button and button:IsA("TextButton") and button.Visible then
-                                    firesignal(button.MouseButton1Click)
-                                    wait(0.5)
-                                end
-                            end
-                        end
-                    end
-                end
-                break
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if table.find(waterClasses, obj.ClassName) then
+            -- Cek berdasarkan properti
+            if obj.Material == Enum.Material.Water or
+               obj.Name:lower():find("water") or
+               obj.Name:lower():find("sea") or
+               obj.Name:lower():find("ocean") or
+               obj.Name:lower():find("lake") or
+               obj.Name:lower():find("river") or
+               obj.BrickColor == BrickColor.new("Bright blue") or
+               obj.BrickColor == BrickColor.new("Medium blue") then
+                return obj
             end
         end
     end
+    return nil
 end
 
 -- ============================================
--- SISTEM ANTI-AFK
+-- FUNGSI UTAMA AUTO FISH
 -- ============================================
-function setupAntiAFK()
-    if not Config.AntiAFK then return end
-    
-    local virtualUser = game:GetService("VirtualUser")
-    local connection
-    
-    connection = game:GetService("Players").LocalPlayer.Idled:Connect(function()
-        virtualUser:CaptureController()
-        virtualUser:ClickButton2(Vector2.new())
-        if Config.DebugMode then
-            print("[ANTI-AFK] Mencegah AFK...")
-        end
-    end)
-    
-    table.insert(Connections, connection)
-    notify("Anti-AFK", "Sistem Anti-AFK diaktifkan", 3)
-end
 
--- ============================================
--- LOOP FISHING UTAMA
--- ============================================
-function startFishingLoop()
-    if IsFishing then return end
-    IsFishing = true
+function startAutoFishing()
+    notify("Auto Fish", "Memulai dengan deteksi advanced...", 3)
     
-    notify("Auto Fish", "Memulai auto fishing...", 3)
-    setupAntiAFK()
+    -- Deteksi game terlebih dahulu
+    local gameData = detectGameType()
+    print("[INFO] Game type: " .. gameData.name)
+    print("[INFO] Cast method: " .. gameData.castMethod)
     
-    while Config.Enabled and IsFishing do
-        if not isGameLoaded() then
-            wait(5)
-            notify("Menunggu", "Menunggu game load...", 3)
-            continue
-        end
+    while Config.Enabled do
+        -- Cast rod
+        local castSuccess = castRodAdvanced()
         
-        -- Step 1: Cast rod
-        if castRod() then
-            wait(Config.Delay.AfterCast)
+        if castSuccess then
+            notify("Fishing", "Kail berhasil dilempar, menunggu ikan...", 2)
             
-            -- Step 2: Tunggu ikan menggigit
-            local biteDetected = false
-            local waitTime = 0
-            local maxWaitTime = 30 -- Maksimal 30 detik menunggu
+            -- Tunggu ikan (simulasi)
+            wait(math.random(3, 8))
             
-            while waitTime < maxWaitTime do
-                if detectFishBite() then
-                    biteDetected = true
-                    break
-                end
-                
-                -- Cek juga jika ada fish di hook
-                if LocalPlayer.Character then
-                    local fishOnHook = LocalPlayer.Character:FindFirstChild(GameData.fishName) or
-                                      Workspace:FindFirstChild(GameData.fishName)
-                    if fishOnHook then
-                        biteDetected = true
-                        break
-                    end
-                end
-                
-                wait(0.5)
-                waitTime = waitTime + 0.5
-                
-                -- Jika timeout, break
-                if waitTime >= maxWaitTime then
-                    notify("Timeout", "Tidak ada ikan yang menggigit", 2)
-                    break
-                end
-            end
+            -- Reel (tarik ikan)
+            notify("Fishing", "Ikan menggigit! Menarik...", 1)
+            wait(0.5)
             
-            -- Step 3: Reel jika ikan menggigit
-            if biteDetected then
-                wait(Config.Delay.AfterBite)
-                if reelFish() then
-                    -- Optional: Auto sell
-                    if Config.AutoSell and FishCaught % 5 == 0 then -- Jual setiap 5 ikan
-                        autoSell()
-                    end
-                end
-            end
-            
-            -- Step 4: Tunggu sebelum cast lagi
-            wait(Config.Delay.BetweenFish)
-            
-            -- Update statistik
-            local elapsed = math.floor(tick() - StartTime)
-            local fishPerMinute = FishCaught / (elapsed / 60)
-            
-            if Config.DebugMode then
-                print(string.format("[STAT] Ikan: %d | Waktu: %ds | FPM: %.1f", 
-                    FishCaught, elapsed, fishPerMinute))
-            end
+            -- Di sini bisa ditambahkan fungsi reelFish()
         else
+            notify("Error", "Gagal melempar, mencoba lagi dalam 3 detik...", 2)
             wait(3)
         end
         
-        -- Small delay untuk mencegah lag
-        RunService.Heartbeat:Wait()
+        -- Delay antar siklus
+        wait(2)
+    end
+end
+
+-- ============================================
+-- GUI UNTUK MANUAL SELECTION
+-- ============================================
+
+function createToolSelector()
+    local ToolSelector = Instance.new("ScreenGui")
+    local MainFrame = Instance.new("Frame")
+    local Title = Instance.new("TextLabel")
+    local ToolList = Instance.new("ScrollingFrame")
+    local SelectButton = Instance.new("TextButton")
+    local CloseButton = Instance.new("TextButton")
+    
+    ToolSelector.Name = "ToolSelector"
+    ToolSelector.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+    
+    MainFrame.Name = "MainFrame"
+    MainFrame.Parent = ToolSelector
+    MainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    MainFrame.BorderSizePixel = 0
+    MainFrame.Position = UDim2.new(0.5, -150, 0.5, -100)
+    MainFrame.Size = UDim2.new(0, 300, 0, 300)
+    
+    Title.Name = "Title"
+    Title.Parent = MainFrame
+    Title.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    Title.Size = UDim2.new(1, 0, 0, 40)
+    Title.Font = Enum.Font.GothamBold
+    Title.Text = "PILIH PANCINGAN MANUAL"
+    Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Title.TextSize = 16
+    
+    ToolList.Name = "ToolList"
+    ToolList.Parent = MainFrame
+    ToolList.Active = true
+    ToolList.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    ToolList.BorderSizePixel = 0
+    ToolList.Position = UDim2.new(0, 10, 0, 50)
+    ToolList.Size = UDim2.new(1, -20, 1, -110)
+    ToolList.ScrollBarThickness = 8
+    
+    SelectButton.Name = "SelectButton"
+    SelectButton.Parent = MainFrame
+    SelectButton.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+    SelectButton.Position = UDim2.new(0.5, -60, 1, -50)
+    SelectButton.Size = UDim2.new(0, 120, 0, 30)
+    SelectButton.Font = Enum.Font.Gotham
+    SelectButton.Text = "PILIH INI"
+    SelectButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    SelectButton.TextSize = 14
+    
+    CloseButton.Name = "CloseButton"
+    CloseButton.Parent = MainFrame
+    CloseButton.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
+    CloseButton.Position = UDim2.new(0.5, -60, 1, -15)
+    CloseButton.Size = UDim2.new(0, 120, 0, 30)
+    CloseButton.Font = Enum.Font.Gotham
+    CloseButton.Text = "TUTUP"
+    CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    CloseButton.TextSize = 14
+    
+    -- Isi daftar tool
+    local tools = {}
+    
+    -- Cari semua tool di inventory
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    if backpack then
+        for _, tool in pairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") or tool:IsA("Model") then
+                table.insert(tools, tool)
+            end
+        end
     end
     
-    IsFishing = false
-    notify("Auto Fish", "Auto fishing dihentikan", 3)
-end
-
-function stopFishingLoop()
-    IsFishing = false
-    Config.Enabled = false
-end
-
--- ============================================
--- GUI CONTROL PANEL
--- ============================================
-function createControlPanel()
-    -- Hapus GUI lama jika ada
-    local existingGUI = LocalPlayer:FindFirstChild("PlayerGui"):FindFirstChild("AutoFishGUI")
-    if existingGUI then existingGUI:Destroy() end
+    -- Cari di character
+    if LocalPlayer.Character then
+        for _, obj in pairs(LocalPlayer.Character:GetChildren()) do
+            if obj:IsA("Tool") or obj:IsA("Model") then
+                table.insert(tools, obj)
+            end
+        end
+    end
     
-    -- Buat ScreenGui
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "AutoFishGUI"
-    screenGui.Parent = LocalPlayer:FindFirstChild("PlayerGui")
-    screenGui.ResetOnSpawn = false
+    -- Buat UI untuk setiap tool
+    local yOffset = 5
+    local buttonHeight = 30
     
-    -- Main Frame
-    local mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 300, 0, 400)
-    mainFrame.Position = UDim2.new(0.5, -150, 0.5, -200)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-    mainFrame.BorderSizePixel = 0
-    mainFrame.Active = true
-    mainFrame.Draggable = true
-    mainFrame.Parent = screenGui
-    
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 8)
-    corner.Parent = mainFrame
-    
-    -- Title
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 40)
-    title.Position = UDim2.new(0, 0, 0, 0)
-    title.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
-    title.Text = "🛠️ AUTO FISH CONTROL PANEL 🎣"
-    title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    title.Font = Enum.Font.GothamBold
-    title.TextSize = 16
-    title.Parent = mainFrame
-    
-    local titleCorner = Instance.new("UICorner")
-    titleCorner.CornerRadius = UDim.new(0, 8)
-    titleCorner.Parent = title
-    
-    -- Status Text
-    local statusText = Instance.new("TextLabel")
-    statusText.Size = UDim2.new(1, -20, 0, 30)
-    statusText.Position = UDim2.new(0, 10, 0, 50)
-    statusText.BackgroundTransparency = 1
-    statusText.Text = "Status: " .. (Config.Enabled and "🟢 AKTIF" or "🔴 NONAKTIF")
-    statusText.TextColor3 = Config.Enabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 50, 50)
-    statusText.Font = Enum.Font.Gotham
-    statusText.TextSize = 14
-    statusText.TextXAlignment = Enum.TextXAlignment.Left
-    statusText.Name = "StatusText"
-    statusText.Parent = mainFrame
-    
-    -- Stats Text
-    local statsText = Instance.new("TextLabel")
-    statsText.Size = UDim2.new(1, -20, 0, 60)
-    statsText.Position = UDim2.new(0, 10, 0, 85)
-    statsText.BackgroundTransparency = 1
-    statsText.Text = "📊 STATISTIK:\nIkan: 0\nWaktu: 0s\nFPM: 0.0"
-    statsText.TextColor3 = Color3.fromRGB(200, 200, 255)
-    statsText.Font = Enum.Font.Gotham
-    statsText.TextSize = 12
-    statsText.TextXAlignment = Enum.TextXAlignment.Left
-    statsText.TextYAlignment = Enum.TextYAlignment.Top
-    statsText.Name = "StatsText"
-    statsText.Parent = mainFrame
-    
-    -- Toggle Button
-    local toggleButton = Instance.new("TextButton")
-    toggleButton.Size = UDim2.new(1, -20, 0, 40)
-    toggleButton.Position = UDim2.new(0, 10, 0, 155)
-    toggleButton.BackgroundColor3 = Config.Enabled and Color3.fromRGB(255, 50, 50) or Color3.fromRGB(50, 200, 50)
-    toggleButton.Text = Config.Enabled and "⏸️ STOP FISHING" or "▶️ START FISHING"
-    toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    toggleButton.Font = Enum.Font.GothamBold
-    toggleButton.TextSize = 14
-    toggleButton.Parent = mainFrame
-    
-    local buttonCorner = Instance.new("UICorner")
-    buttonCorner.CornerRadius = UDim.new(0, 6)
-    buttonCorner.Parent = toggleButton
-    
-    -- Settings Frame
-    local settingsFrame = Instance.new("Frame")
-    settingsFrame.Size = UDim2.new(1, -20, 0, 170)
-    settingsFrame.Position = UDim2.new(0, 10, 0, 205)
-    settingsFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-    settingsFrame.BorderSizePixel = 0
-    settingsFrame.Parent = mainFrame
-    
-    local settingsCorner = Instance.new("UICorner")
-    settingsCorner.CornerRadius = UDim.new(0, 6)
-    settingsCorner.Parent = settingsFrame
-    
-    local settingsTitle = Instance.new("TextLabel")
-    settingsTitle.Size = UDim2.new(1, 0, 0, 30)
-    settingsTitle.Position = UDim2.new(0, 0, 0, 0)
-    settingsTitle.BackgroundTransparency = 1
-    settingsTitle.Text = "⚙️ PENGATURAN"
-    settingsTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-    settingsTitle.Font = Enum.Font.GothamBold
-    settingsTitle.TextSize = 14
-    settingsTitle.Parent = settingsFrame
-    
-    -- Auto Cast Toggle
-    local autoCastToggle = createToggle("Auto Cast", 35, Config.AutoCast, settingsFrame)
-    local autoReelToggle = createToggle("Auto Reel", 60, Config.AutoReel, settingsFrame)
-    local autoSellToggle = createToggle("Auto Sell", 85, Config.AutoSell, settingsFrame)
-    local notificationsToggle = createToggle("Notifications", 110, Config.Notifications, settingsFrame)
-    local antiAFKToggle = createToggle("Anti-AFK", 135, Config.AntiAFK, settingsFrame)
-    
-    -- Close Button
-    local closeButton = Instance.new("TextButton")
-    closeButton.Size = UDim2.new(0, 30, 0, 30)
-    closeButton.Position = UDim2.new(1, -35, 0, 5)
-    closeButton.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
-    closeButton.Text = "X"
-    closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    closeButton.Font = Enum.Font.GothamBold
-    closeButton.TextSize = 14
-    closeButton.Parent = mainFrame
-    
-    local closeCorner = Instance.new("UICorner")
-    closeCorner.CornerRadius = UDim.new(0, 15)
-    closeCorner.Parent = closeButton
-    
-    -- Fungsi toggle
-    toggleButton.MouseButton1Click:Connect(function()
-        Config.Enabled = not Config.Enabled
-        toggleButton.Text = Config.Enabled and "⏸️ STOP FISHING" or "▶️ START FISHING"
-        toggleButton.BackgroundColor3 = Config.Enabled and Color3.fromRGB(255, 50, 50) or Color3.fromRGB(50, 200, 50)
-        statusText.Text = "Status: " .. (Config.Enabled and "🟢 AKTIF" or "🔴 NONAKTIF")
-        statusText.TextColor3 = Config.Enabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 50, 50)
+    for i, tool in pairs(tools) do
+        local ToolButton = Instance.new("TextButton")
+        ToolButton.Name = "Tool_" .. i
+        ToolButton.Parent = ToolList
+        ToolButton.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+        ToolButton.Position = UDim2.new(0, 5, 0, yOffset)
+        ToolButton.Size = UDim2.new(1, -10, 0, buttonHeight)
+        ToolButton.Font = Enum.Font.Gotham
+        ToolButton.Text = tool.Name .. " (" .. tool.ClassName .. ")"
+        ToolButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        ToolButton.TextSize = 12
+        ToolButton.TextXAlignment = Enum.TextXAlignment.Left
         
-        if Config.Enabled then
-            spawn(startFishingLoop)
-        else
-            stopFishingLoop()
+        -- Highlight jika mungkin fishing rod
+        if isFishingRodObject(tool) then
+            ToolButton.BackgroundColor3 = Color3.fromRGB(70, 120, 70)
         end
-    end)
-    
-    -- Update stats loop
-    spawn(function()
-        while screenGui and screenGui.Parent do
-            local elapsed = math.floor(tick() - StartTime)
-            local fishPerMinute = FishCaught > 0 and FishCaught / (elapsed / 60) or 0
-            statsText.Text = string.format("📊 STATISTIK:\nIkan: %d\nWaktu: %ds\nFPM: %.1f", 
-                FishCaught, elapsed, fishPerMinute)
-            wait(1)
-        end
-    end)
-    
-    -- Close button
-    closeButton.MouseButton1Click:Connect(function()
-        screenGui:Destroy()
-    end)
-    
-    return screenGui
-end
-
-function createToggle(label, yPos, initialState, parent)
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, -10, 0, 20)
-    frame.Position = UDim2.new(0, 5, 0, yPos)
-    frame.BackgroundTransparency = 1
-    frame.Parent = parent
-    
-    local labelText = Instance.new("TextLabel")
-    labelText.Size = UDim2.new(0.7, 0, 1, 0)
-    labelText.Position = UDim2.new(0, 0, 0, 0)
-    labelText.BackgroundTransparency = 1
-    labelText.Text = "  " .. label
-    labelText.TextColor3 = Color3.fromRGB(255, 255, 255)
-    labelText.Font = Enum.Font.Gotham
-    labelText.TextSize = 12
-    labelText.TextXAlignment = Enum.TextXAlignment.Left
-    labelText.Parent = frame
-    
-    local toggleButton = Instance.new("TextButton")
-    toggleButton.Size = UDim2.new(0, 40, 0, 20)
-    toggleButton.Position = UDim2.new(1, -40, 0, 0)
-    toggleButton.BackgroundColor3 = initialState and Color3.fromRGB(0, 200, 0) or Color3.fromRGB(100, 100, 100)
-    toggleButton.Text = initialState and "ON" or "OFF"
-    toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    toggleButton.Font = Enum.Font.Gotham
-    toggleButton.TextSize = 11
-    toggleButton.Name = label
-    toggleButton.Parent = frame
-    
-    local buttonCorner = Instance.new("UICorner")
-    buttonCorner.CornerRadius = UDim.new(0, 10)
-    buttonCorner.Parent = toggleButton
-    
-    toggleButton.MouseButton1Click:Connect(function()
-        local newState = not (toggleButton.Text == "ON")
-        toggleButton.Text = newState and "ON" or "OFF"
-        toggleButton.BackgroundColor3 = newState and Color3.fromRGB(0, 200, 0) or Color3.fromRGB(100, 100, 100)
         
-        -- Update config
-        if label == "Auto Cast" then
-            Config.AutoCast = newState
-        elseif label == "Auto Reel" then
-            Config.AutoReel = newState
-        elseif label == "Auto Sell" then
-            Config.AutoSell = newState
-        elseif label == "Notifications" then
-            Config.Notifications = newState
-        elseif label == "Anti-AFK" then
-            Config.AntiAFK = newState
-        end
-    end)
-    
-    return toggleButton
-end
-
--- ============================================
--- FUNGSI INISIALISASI
--- ============================================
-function initialize()
-    -- Tunggu game load
-    while not isGameLoaded() do
-        wait(1)
-    end
-    
-    notify("Auto Fish", "Script loaded successfully!", 3)
-    
-    -- Buat control panel
-    createControlPanel()
-    
-    -- Start fishing jika enabled
-    if Config.Enabled then
-        spawn(startFishingLoop)
-    end
-end
-
--- ============================================
--- COMMANDS & KEYBINDS
--- ============================================
--- Hotkey untuk toggle (F6)
-local toggleConnection
-toggleConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if not gameProcessed then
-        if input.KeyCode == Enum.KeyCode.F6 then
-            Config.Enabled = not Config.Enabled
+        ToolButton.MouseButton1Click:Connect(function()
+            for _, btn in pairs(ToolList:GetChildren()) do
+                if btn:IsA("TextButton") then
+                    btn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+                end
+            end
+            ToolButton.BackgroundColor3 = Color3.fromRGB(0, 120, 200)
             
-            if Config.Enabled then
-                notify("Auto Fish", "AUTO FISH DIHIDUPKAN (F6)", 2)
-                spawn(startFishingLoop)
-            else
-                notify("Auto Fish", "Auto fish dimatikan (F6)", 2)
-                stopFishingLoop()
-            end
-        elseif input.KeyCode == Enum.KeyCode.F7 then
-            -- Toggle GUI
-            local gui = LocalPlayer:FindFirstChild("PlayerGui"):FindFirstChild("AutoFishGUI")
-            if gui then
-                gui.Enabled = not gui.Enabled
-            else
-                createControlPanel()
-            end
-        elseif input.KeyCode == Enum.KeyCode.F8 then
-            -- Reset stats
-            FishCaught = 0
-            StartTime = tick()
-            notify("Reset", "Statistik direset", 2)
-        end
-    end
-end)
-
-table.insert(Connections, toggleConnection)
-
--- ============================================
--- CLEANUP FUNCTION
--- ============================================
-function cleanup()
-    IsFishing = false
-    Config.Enabled = false
-    
-    -- Putuskan semua koneksi
-    for _, connection in pairs(Connections) do
-        if connection then
-            connection:Disconnect()
-        end
+            SelectButton.MouseButton1Click:Connect(function()
+                notify("Manual Select", "Memilih: " .. tool.Name, 3)
+                -- Simpan pilihan untuk digunakan nanti
+                _G.SelectedFishingRod = tool
+                ToolSelector:Destroy()
+            end)
+        end)
+        
+        yOffset = yOffset + buttonHeight + 5
     end
     
-    -- Hapus GUI
-    local gui = LocalPlayer:FindFirstChild("PlayerGui"):FindFirstChild("AutoFishGUI")
-    if gui then gui:Destroy() end
+    ToolList.CanvasSize = UDim2.new(0, 0, 0, yOffset)
     
-    notify("Auto Fish", "Script dihentikan dan dibersihkan", 3)
+    CloseButton.MouseButton1Click:Connect(function()
+        ToolSelector:Destroy()
+    end)
+    
+    return ToolSelector
 end
 
 -- ============================================
--- EXECUTE SCRIPT
+-- FUNGSI MANUAL PICK ROD
 -- ============================================
--- Tunggu player load
-if not LocalPlayer or not LocalPlayer.Character then
-    LocalPlayer.CharacterAdded:Wait()
+
+function manualRodSelection()
+    notify("Manual Mode", "Silakan pilih pancingan dari GUI", 5)
+    createToolSelector()
+    
+    -- Tunggu user memilih
+    while wait(1) do
+        if _G.SelectedFishingRod then
+            notify("Success", "Pancingan dipilih: " .. _G.SelectedFishingRod.Name, 3)
+            return _G.SelectedFishingRod
+        end
+    end
 end
 
--- Inisialisasi setelah delay kecil
-wait(2)
-initialize()
-
--- Hook cleanup ke karakter removal
-LocalPlayer.CharacterRemoving:Connect(cleanup)
-game:GetService("Players").PlayerRemoving:Connect(function(player)
-    if player == LocalPlayer then
-        cleanup()
-    end
-end)
-
 -- ============================================
--- INFORMASI PENGGUNAAN
+-- INISIALISASI
 -- ============================================
+
 print([[
 ============================================
-🎣 AUTO FISH SCRIPT LOADED 🎣
+🎣 AUTO FISH SCRIPT - ADVANCED DETECTION 🎣
 ============================================
-HOTKEYS:
-• F6 - Toggle Auto Fish
-• F7 - Toggle Control Panel
-• F8 - Reset Statistics
 
-FITUR:
-• Auto Cast & Reel
-• Auto Sell (opsional)
-• Anti-AFK System
-• Statistics Tracker
-• Control Panel GUI
+Fitur:
+1. Multi-method rod detection
+2. Game auto-detection
+3. Manual selection GUI
+4. Advanced debugging
 
-STATUS: ]] .. (Config.Enabled and "AKTIF" or "NONAKTIF") .. [[
+Status Debug: ]] .. (Config.DebugMode and "AKTIF" or "NONAKTIF") .. [[
 
 ============================================
 ]])
 
--- Return config untuk modifikasi manual
-return {
-    Config = Config,
-    start = startFishingLoop,
-    stop = stopFishingLoop,
-    cleanup = cleanup
-}
+-- Tunggu game load
+wait(2)
+
+-- Pilihan untuk user
+local choice = nil
+while not choice do
+    print("\nPilih mode:")
+    print("1. Auto detect fishing rod")
+    print("2. Manual select fishing rod")
+    print("3. Test detection only")
+    
+    -- Untuk executor, kita pilih auto dulu
+    choice = 1
+    wait(1)
+    
+    if choice == 1 then
+        notify("Mode", "Menggunakan auto detection", 3)
+        startAutoFishing()
+    elseif choice == 2 then
+        notify("Mode", "Menggunakan manual selection", 3)
+        manualRodSelection()
+    elseif choice == 3 then
+        notify("Test", "Testing detection only", 3)
+        local rod = findFishingRod()
+        if rod then
+            notify("Test Success", "Found: " .. rod.Name, 5)
+        else
+            notify("Test Failed", "No rod found", 5)
+        end
+    end
+end
