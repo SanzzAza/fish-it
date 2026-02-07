@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DramaCina</title>
+  <style>
+    body { font-family: Arial, sans-serif; background:#0a0a0a; color:#fff; margin:0; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 20px; }
+    .drama-grid { display:grid; grid-template-columns: repeat(auto-fill,minmax(170px,1fr)); gap:16px; }
+    .drama-card { background:#1a1a2e; border-radius:12px; overflow:hidden; cursor:pointer; }
+    .drama-card img { width:100%; aspect-ratio:2/3; object-fit:cover; display:block; }
+    .card-info { padding:10px; }
+    .card-title { font-size:14px; margin:0 0 6px; }
+    .toast { position: fixed; right: 20px; bottom: 20px; background:#1a1a2e; border:1px solid #e50914; padding:10px 14px; border-radius:10px; display:none; }
+    .toast.show { display:block; }
+    button { background:#e50914; border:none; color:#fff; border-radius:8px; padding:8px 12px; cursor:pointer; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>DramaCina</h1>
+    <p>Versi HTML yang sudah langsung terintegrasi fix ID card.</p>
+    <button onclick="renderDemo()">Render Demo Cards</button>
+    <div id="grid" class="drama-grid" style="margin-top:16px"></div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    // Helpers
+    function esc(s) {
+      if (!s) return '';
+      const d = document.createElement('div');
+      d.textContent = String(s);
+      return d.innerHTML;
+    }
+
+    function showToast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.classList.add('show');
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => el.classList.remove('show'), 2500);
+    }
+
+    function safeJsString(value) {
+      return String(value ?? '')
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/\"/g, '&quot;')
+        .replace(/\r/g, ' ')
+        .replace(/\n/g, ' ');
+    }
+
+    function isValidDramaId(id) {
+      return id !== null && id !== undefined && String(id).trim() !== '';
+    }
+
+    // Mapping
+    function getId(d) { return d.playlet_id || d.id || ''; }
+    function getTitle(d) { return d.title || 'Untitled'; }
+    function getPoster(d) {
+      return d.cover || d.poster || 'https://placehold.co/300x450/1a1a2e/666?text=No+Image';
+    }
+
+    // ✅ FIXED: aman untuk ID string / ID kosong
+    function cardHTML(d) {
+      const id = getId(d);
+      const title = getTitle(d);
+      const poster = getPoster(d);
+      const validId = isValidDramaId(id);
+      const safeId = safeJsString(id);
+
+      const clickAttr = validId
+        ? `onclick="openDrama('${safeId}')"`
+        : `onclick="showToast('ID drama tidak ditemukan')" style="cursor:not-allowed;opacity:.85"`;
+
+      return `
+        <div class="drama-card" ${clickAttr}>
+          <img src="${poster}" alt="${esc(title)}" onerror="this.src='https://placehold.co/300x450/1a1a2e/666?text=No+Image'">
+          <div class="card-info"><h3 class="card-title">${esc(title)}</h3></div>
+        </div>
+      `;
+    }
+
+    // ✅ FIXED: guard ID invalid
+    async function openDrama(id) {
+      if (!isValidDramaId(id)) {
+        showToast('ID drama tidak ditemukan');
+        console.error('❌ openDrama: invalid ID:', id);
+        return;
+      }
+
+      // simulasi buka detail
+      showToast(`Buka detail drama ID: ${id}`);
+    }
+
+    function renderDemo() {
+      const demo = [
+        { playlet_id: 12345, title: 'Drama valid numeric', cover: 'https://placehold.co/300x450/0f172a/e2e8f0?text=Valid+ID' },
+        { playlet_id: 'abc-777', title: 'Drama valid string', cover: 'https://placehold.co/300x450/111827/e5e7eb?text=String+ID' },
+        { title: 'Drama tanpa ID (harus aman)' }
+      ];
+
+      document.getElementById('grid').innerHTML = demo.map(cardHTML).join('');
+    }
+
+    renderDemo();
+  </script>
+</body>
+</html>
